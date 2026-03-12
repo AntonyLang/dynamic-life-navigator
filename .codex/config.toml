@@ -1,0 +1,6 @@
+# Project-level Codex configuration.
+# Keep durable project settings here.
+# See Codex config basics / reference before adding advanced keys.
+
+# This repo should be treated as a software project rooted at .git.
+# AGENTS.md in repo root defines the main implementation policy.

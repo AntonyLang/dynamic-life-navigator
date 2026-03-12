@@ -1,0 +1,73 @@
+---
+description: Core project architecture and implementation constraints
+globs:
+  - "**/*"
+alwaysApply: true
+---
+
+This repository implements a personal navigation assistant / value-driven personal operating system.
+It is not a generic todo app.
+
+Always read these documents before making substantial changes:
+- revised_pm/07_Engineering_Addendum_V2_1.md
+- revised_pm/02_API_Workflows_Prompts_V2.md
+- revised_pm/03_Database_Schema_V2.md
+- revised_pm/05_System_Architecture_V2.md
+- revised_pm/01_PRD_V2.md
+- revised_pm/04_Frontend_Design_V2.md
+- revised_pm/06_User_Scenarios_Validation_V2.md
+- revised_pm/00_Revision_Summary.md
+
+If documents conflict, follow the order above.
+
+Core architecture:
+- Service + Worker + Data Loop
+- event_logs is the fact layer
+- user_state is the snapshot layer
+- recommendation pipeline = Filter + Ranker + Renderer
+- MVP-first, engineering-rigorous
+
+Implementation rules:
+- Prefer conservative, high-confidence changes
+- Do not over-design
+- Do not invent new product directions
+- Keep LLM off critical synchronous paths
+- Keep ingest low-latency: validate, persist event, idempotency check, return ack
+- Run heavy parsing, enrichment, state recomputation, and recommendation refresh asynchronously
+- New action nodes must not block on LLM profiling
+- If energy profile is missing, use defaults:
+  - mental_energy_required = 50
+  - physical_energy_required = 20
+- Use schema-first structured outputs for any LLM JSON workflow
+- Use Redis + DB dual-layer idempotency
+- Use optimistic concurrency with state_version
+- Preserve recommendation_records and recommendation_feedback
+
+Expected stack unless repo already establishes another:
+- Python 3.11+
+- FastAPI
+- SQLAlchemy 2.x
+- Pydantic v2
+- Alembic
+- PostgreSQL
+- Redis
+- Celery
+- pytest
+
+When implementing substantial work:
+1. Inspect repository and relevant docs first
+2. Produce a concise implementation plan
+3. Execute in small, reviewable steps
+4. Run tests / verification
+5. Report files changed, what remains, and risks
+
+Development workflow rule:
+
+Before implementing major code:
+1. Inspect repository structure
+2. Produce a short implementation plan
+3. Implement in small steps
+4. Run tests or verification
+5. Summarize files changed and remaining work
+
+Never perform large unplanned refactors.
