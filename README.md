@@ -10,11 +10,14 @@ This repository currently provides:
 - environment-based settings
 - request ID middleware and basic logging
 - `/health` and `/ready` endpoints
+- PM-aligned API aliases for `/api/v1/events/ingest`, `/api/v1/state`, `/api/v1/recommendations/next`, `/api/v1/recommendations/{id}/feedback`, and `/api/v1/brief`
 - Celery bootstrap
 - local Docker Compose for PostgreSQL and Redis
+- database-backed state updates, pull recommendations, feedback learning, and weak push decision records
 
 `ENABLE_WORKER_DISPATCH` defaults to `false` so request handlers stay fast even when Redis/workers are not running locally.
 `DEFAULT_USER_ID` is the single-user MVP identity used by the current DB-backed services.
+The current push path only decides whether a push recommendation should be generated and stores the result in `recommendation_records`; it does not send external notifications yet.
 
 ## Local setup
 
@@ -42,6 +45,34 @@ uvicorn app.main:app --reload
 
 ```bash
 celery -A app.workers.celery_app:celery_app worker -l info
+```
+
+## Quick E2E Check
+
+With the API running locally, you can exercise the current MVP backend in this order:
+
+1. Ingest a user event:
+
+```powershell
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/v1/events/ingest -ContentType 'application/json' -Body '{"channel":"desktop_plugin","message_type":"text","text":"Just finished a heavy debugging session.","client_message_id":"manual-e2e-001","occurred_at":"2026-03-13T09:00:00+08:00"}'
+```
+
+2. Read the current state snapshot:
+
+```powershell
+Invoke-RestMethod -Method Get -Uri http://127.0.0.1:8000/api/v1/state
+```
+
+3. Pull the next recommendation:
+
+```powershell
+Invoke-RestMethod -Method Get -Uri http://127.0.0.1:8000/api/v1/recommendations/next
+```
+
+4. Read the brief summary:
+
+```powershell
+Invoke-RestMethod -Method Get -Uri http://127.0.0.1:8000/api/v1/brief
 ```
 
 ## Verify

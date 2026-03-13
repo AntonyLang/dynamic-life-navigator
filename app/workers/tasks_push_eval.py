@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import logging
 
+from app.core.logging import log_event
+from app.db.session import SessionLocal
+from app.services.push_service import evaluate_push_opportunities as evaluate_push_opportunities_service
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -11,7 +14,18 @@ logger = logging.getLogger(__name__)
 
 @celery_app.task(name="app.workers.evaluate_push_opportunities")
 def evaluate_push_opportunities(trigger_event_id: str | None = None) -> dict[str, str | None]:
-    """Placeholder task for push evaluation."""
+    """Evaluate whether a weak push recommendation should be generated."""
 
-    logger.info("evaluate_push_opportunities task queued trigger_event_id=%s", trigger_event_id)
-    return {"status": "queued", "trigger_event_id": trigger_event_id}
+    log_event(logger, logging.INFO, "push evaluation task started", trigger_event_id=trigger_event_id)
+    with SessionLocal() as session:
+        result = evaluate_push_opportunities_service(session, trigger_event_id)
+    log_event(
+        logger,
+        logging.INFO,
+        "push evaluation task completed",
+        trigger_event_id=trigger_event_id,
+        status=result.get("status"),
+        recommendation_id=result.get("recommendation_id"),
+        reason=result.get("reason"),
+    )
+    return result

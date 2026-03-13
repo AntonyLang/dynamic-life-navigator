@@ -24,6 +24,8 @@ def create_celery_app() -> Celery:
         task_track_started=True,
         imports=[
             "app.workers.tasks_parse",
+            "app.workers.tasks_profile",
+            "app.workers.tasks_scores",
             "app.workers.tasks_state",
             "app.workers.tasks_enrich",
             "app.workers.tasks_compress",
@@ -40,5 +42,7 @@ celery_app = create_celery_app()
 from app.workers import tasks_compress as _tasks_compress  # noqa: E402,F401
 from app.workers import tasks_enrich as _tasks_enrich  # noqa: E402,F401
 from app.workers import tasks_parse as _tasks_parse  # noqa: E402,F401
+from app.workers import tasks_profile as _tasks_profile  # noqa: E402,F401
 from app.workers import tasks_push_eval as _tasks_push_eval  # noqa: E402,F401
+from app.workers import tasks_scores as _tasks_scores  # noqa: E402,F401
 from app.workers import tasks_state as _tasks_state  # noqa: E402,F401

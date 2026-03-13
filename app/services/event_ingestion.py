@@ -8,11 +8,13 @@ from datetime import datetime, timezone
 from hashlib import sha256
 from uuid import uuid4
 
+from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.core.logging import log_event
 from app.models.event_log import EventLog
 from app.schemas.chat import ChatMessageRequest, ChatMessageResponse
 from app.schemas.webhooks import WebhookIngestResponse
@@ -27,13 +29,13 @@ def _enqueue_parse_task(event_id: str) -> None:
     """Attempt to enqueue parse work without making the request path brittle."""
 
     if not settings.enable_worker_dispatch:
-        logger.info("worker dispatch disabled; skipping parse_event_log enqueue for event_id=%s", event_id)
+        log_event(logger, logging.INFO, "worker dispatch disabled; skipping parse enqueue", event_id=event_id)
         return
 
     try:
         parse_event_log.delay(event_id)
     except Exception:
-        logger.exception("failed to enqueue parse_event_log for event_id=%s", event_id)
+        logger.exception("failed to enqueue parse task event_id=%s", event_id)
 
 
 def ingest_chat_message(db: Session, request_id: str, payload: ChatMessageRequest) -> ChatMessageResponse:
@@ -61,8 +63,34 @@ def ingest_chat_message(db: Session, request_id: str, payload: ChatMessageReques
         occurred_at=payload.occurred_at,
         ingested_at=datetime.now(timezone.utc),
     )
-    db.add(event_log)
-    db.commit()
+    try:
+        db.add(event_log)
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        log_event(
+            logger,
+            logging.INFO,
+            "chat duplicate suppressed",
+            user_id=settings.default_user_id,
+            source=payload.channel,
+            duplicate=True,
+            external_event_id=payload.client_message_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="client_message_id already exists for this source",
+        ) from exc
+
+    log_event(
+        logger,
+        logging.INFO,
+        "chat event ingested",
+        event_id=event_id,
+        user_id=settings.default_user_id,
+        source=payload.channel,
+        parse_status="pending",
+    )
 
     _enqueue_parse_task(str(event_id))
     current_state = get_current_state(db)
@@ -115,6 +143,16 @@ def ingest_webhook_event_with_db(
         db.add(event_log)
         db.commit()
         duplicate = False
+        log_event(
+            logger,
+            logging.INFO,
+            "webhook event ingested",
+            event_id=event_id,
+            user_id=settings.default_user_id,
+            source=source,
+            duplicate=False,
+            parse_status="pending",
+        )
     except IntegrityError:
         db.rollback()
         duplicate = True
@@ -142,6 +180,15 @@ def ingest_webhook_event_with_db(
 
         if existing_event_id is not None:
             event_id = existing_event_id
+        log_event(
+            logger,
+            logging.INFO,
+            "webhook duplicate suppressed",
+            event_id=event_id,
+            user_id=settings.default_user_id,
+            source=source,
+            duplicate=True,
+        )
 
     if not duplicate:
         _enqueue_parse_task(str(event_id))

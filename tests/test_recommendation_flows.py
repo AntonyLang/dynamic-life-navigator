@@ -451,3 +451,219 @@ def test_pull_returns_fallback_when_no_candidate_matches_energy():
             restored_state.source_last_event_at = original_state["source_last_event_at"]
             session.add(restored_state)
             session.commit()
+
+
+def test_pull_penalizes_recent_same_type_completion():
+    client = TestClient(app)
+    node_ids: list = []
+
+    with SessionLocal() as session:
+        recommendation_id = None
+        state = session.get(UserState, settings.default_user_id)
+        if state is None:
+            state = UserState(user_id=settings.default_user_id)
+            session.add(state)
+            session.commit()
+            session.refresh(state)
+
+        original_state = {
+            "mental_energy": state.mental_energy,
+            "physical_energy": state.physical_energy,
+            "focus_mode": state.focus_mode,
+            "state_version": state.state_version,
+            "recent_context": state.recent_context,
+            "updated_at": state.updated_at,
+            "source_last_event_id": state.source_last_event_id,
+            "source_last_event_at": state.source_last_event_at,
+        }
+
+        state.mental_energy = 80
+        state.physical_energy = 80
+        session.add(state)
+
+        recently_completed = ActionNode(
+            node_id=uuid4(),
+            user_id=settings.default_user_id,
+            drive_type="project",
+            status="active",
+            title="Finished backend write-up",
+            tags=["backend", "writing"],
+            last_completed_at=datetime.now(timezone.utc) - timedelta(hours=2),
+            priority_score=20,
+            dynamic_urgency_score=10,
+            mental_energy_required=20,
+            physical_energy_required=5,
+        )
+        penalized_candidate = ActionNode(
+            node_id=uuid4(),
+            user_id=settings.default_user_id,
+            drive_type="project",
+            status="active",
+            title="Write another backend summary",
+            tags=["backend", "writing"],
+            priority_score=85,
+            dynamic_urgency_score=60,
+            mental_energy_required=20,
+            physical_energy_required=5,
+        )
+        fresh_candidate = ActionNode(
+            node_id=uuid4(),
+            user_id=settings.default_user_id,
+            drive_type="project",
+            status="active",
+            title="Fix API integration test",
+            tags=["frontend", "api"],
+            priority_score=75,
+            dynamic_urgency_score=55,
+            mental_energy_required=20,
+            physical_energy_required=5,
+        )
+        node_ids = [recently_completed.node_id, penalized_candidate.node_id, fresh_candidate.node_id]
+        session.add_all([recently_completed, penalized_candidate, fresh_candidate])
+        session.commit()
+
+        try:
+            response = client.get("/api/v1/recommendations/pull?limit=1")
+            assert response.status_code == 200
+            recommendation_id = UUID(response.json()["recommendation_id"])
+            body = response.json()
+
+            assert body["empty_state"] is False
+            assert body["items"][0]["title"] == "Fix API integration test"
+
+            record = session.scalar(
+                select(RecommendationRecord).where(RecommendationRecord.recommendation_id == recommendation_id)
+            )
+            penalized_snapshot = record.ranking_snapshot[str(penalized_candidate.node_id)]
+            assert "same_type_recent_completion_penalty" in penalized_snapshot["reason_tags"]
+        finally:
+            if recommendation_id is not None:
+                session.execute(
+                    delete(RecommendationRecord).where(
+                        RecommendationRecord.recommendation_id == recommendation_id
+                    )
+                )
+            session.execute(delete(ActionNode).where(ActionNode.node_id.in_(node_ids)))
+            restored_state = session.get(UserState, settings.default_user_id)
+            restored_state.mental_energy = original_state["mental_energy"]
+            restored_state.physical_energy = original_state["physical_energy"]
+            restored_state.focus_mode = original_state["focus_mode"]
+            restored_state.state_version = original_state["state_version"]
+            restored_state.recent_context = original_state["recent_context"]
+            restored_state.updated_at = original_state["updated_at"]
+            restored_state.source_last_event_id = original_state["source_last_event_id"]
+            restored_state.source_last_event_at = original_state["source_last_event_at"]
+            session.add(restored_state)
+            session.commit()
+
+
+def test_pull_penalizes_exposure_fatigue():
+    client = TestClient(app)
+    node_ids: list = []
+    stale_recommendation_ids: list = []
+
+    with SessionLocal() as session:
+        recommendation_id = None
+        state = session.get(UserState, settings.default_user_id)
+        if state is None:
+            state = UserState(user_id=settings.default_user_id)
+            session.add(state)
+            session.commit()
+            session.refresh(state)
+
+        original_state = {
+            "mental_energy": state.mental_energy,
+            "physical_energy": state.physical_energy,
+            "focus_mode": state.focus_mode,
+            "state_version": state.state_version,
+            "recent_context": state.recent_context,
+            "updated_at": state.updated_at,
+            "source_last_event_id": state.source_last_event_id,
+            "source_last_event_at": state.source_last_event_at,
+        }
+
+        state.mental_energy = 70
+        state.physical_energy = 70
+        session.add(state)
+
+        fatigued_node = ActionNode(
+            node_id=uuid4(),
+            user_id=settings.default_user_id,
+            drive_type="project",
+            status="active",
+            title="Over-exposed candidate",
+            priority_score=85,
+            dynamic_urgency_score=50,
+            mental_energy_required=15,
+            physical_energy_required=5,
+        )
+        fresh_node = ActionNode(
+            node_id=uuid4(),
+            user_id=settings.default_user_id,
+            drive_type="project",
+            status="active",
+            title="Fresh candidate",
+            priority_score=80,
+            dynamic_urgency_score=50,
+            mental_energy_required=15,
+            physical_energy_required=5,
+        )
+        node_ids = [fatigued_node.node_id, fresh_node.node_id]
+        session.add_all([fatigued_node, fresh_node])
+        session.commit()
+
+        for _ in range(2):
+            stale_record = RecommendationRecord(
+                user_id=settings.default_user_id,
+                mode="pull",
+                trigger_type="manual_pull",
+                candidate_node_ids=[fatigued_node.node_id],
+                selected_node_ids=[fatigued_node.node_id],
+                ranking_snapshot={},
+                rendered_content={"items": []},
+                delivery_status="generated",
+            )
+            session.add(stale_record)
+            session.flush()
+            stale_recommendation_ids.append(stale_record.recommendation_id)
+        session.commit()
+
+        try:
+            response = client.get("/api/v1/recommendations/pull?limit=1")
+            assert response.status_code == 200
+            recommendation_id = UUID(response.json()["recommendation_id"])
+            body = response.json()
+
+            assert body["empty_state"] is False
+            assert body["items"][0]["title"] == "Fresh candidate"
+
+            record = session.scalar(
+                select(RecommendationRecord).where(RecommendationRecord.recommendation_id == recommendation_id)
+            )
+            fatigued_snapshot = record.ranking_snapshot[str(fatigued_node.node_id)]
+            assert "exposure_fatigue_penalty" in fatigued_snapshot["reason_tags"]
+        finally:
+            if recommendation_id is not None:
+                stale_recommendation_ids.append(recommendation_id)
+            session.execute(
+                delete(RecommendationFeedback).where(
+                    RecommendationFeedback.recommendation_id.in_(stale_recommendation_ids)
+                )
+            )
+            session.execute(
+                delete(RecommendationRecord).where(
+                    RecommendationRecord.recommendation_id.in_(stale_recommendation_ids)
+                )
+            )
+            session.execute(delete(ActionNode).where(ActionNode.node_id.in_(node_ids)))
+            restored_state = session.get(UserState, settings.default_user_id)
+            restored_state.mental_energy = original_state["mental_energy"]
+            restored_state.physical_energy = original_state["physical_energy"]
+            restored_state.focus_mode = original_state["focus_mode"]
+            restored_state.state_version = original_state["state_version"]
+            restored_state.recent_context = original_state["recent_context"]
+            restored_state.updated_at = original_state["updated_at"]
+            restored_state.source_last_event_id = original_state["source_last_event_id"]
+            restored_state.source_last_event_at = original_state["source_last_event_at"]
+            session.add(restored_state)
+            session.commit()

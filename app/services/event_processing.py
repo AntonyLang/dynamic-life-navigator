@@ -4,17 +4,21 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import logging
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
+from app.core.logging import log_event
 from app.models.event_log import EventLog
 from app.models.state_history import StateHistory
 from app.models.user_state import UserState
 from app.schemas.common import UserStateSnapshot
 from app.services.state_service import _ensure_user_state, _snapshot_from_model
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -43,55 +47,106 @@ class ParsedImpact:
         }
 
 
+@dataclass(slots=True)
+class ParseResult:
+    """Structured parse result with explicit status."""
+
+    impact: ParsedImpact | None
+    status: str
+
+
 def _clamp_energy(value: int) -> int:
     return max(0, min(100, value))
 
 
-def _parse_from_text(text: str | None, source: str) -> ParsedImpact:
-    """Build a conservative deterministic impact from raw text."""
+def _parse_from_event(event: EventLog) -> ParseResult:
+    """Build a conservative deterministic impact from an event log."""
 
-    lowered = (text or "").lower()
-    event_type = "other"
-    mental_delta = 0
-    physical_delta = 0
-    focus_mode = "unknown"
-    tags: list[str] = []
-    summary = text.strip() if text else f"{source} event received"
+    text = (event.raw_text or "").strip()
+    lowered = text.lower()
+
+    if not text and not event.raw_payload:
+        return ParseResult(impact=None, status="failed")
+
+    summary = text[:300] if text else f"{event.source} event received"
     should_offer_pull_hint = False
 
     if any(token in lowered for token in ("debug", "experiment", "study", "coding", "burned", "drained", "tired")):
-        event_type = "chat_update"
-        mental_delta = -20
-        focus_mode = "tired"
-        tags.append("mental_load")
-        should_offer_pull_hint = True
-    elif any(token in lowered for token in ("sleep", "nap", "rest", "recovered", "break")):
-        event_type = "rest"
-        mental_delta = 15
-        physical_delta = 10
-        focus_mode = "recovered"
-        tags.append("recovery")
-    elif any(token in lowered for token in ("walk", "ride", "run", "exercise", "workout")):
-        event_type = "exercise"
-        mental_delta = 10
-        physical_delta = -15
-        focus_mode = "recovered"
-        tags.extend(["movement", "recovery"])
-        should_offer_pull_hint = True
-    elif source in {"github", "calendar", "strava"}:
-        event_type = source
-        tags.append(source)
+        return ParseResult(
+            impact=ParsedImpact(
+                event_summary=summary,
+                event_type="chat_update",
+                mental_delta=-20,
+                physical_delta=0,
+                focus_mode="tired",
+                tags=["mental_load"],
+                should_offer_pull_hint=True,
+                confidence=0.7,
+            ),
+            status="success",
+        )
 
-    return ParsedImpact(
-        event_summary=summary[:300],
-        event_type=event_type,
-        mental_delta=mental_delta,
-        physical_delta=physical_delta,
-        focus_mode=focus_mode,
-        tags=tags,
-        should_offer_pull_hint=should_offer_pull_hint,
-        confidence=0.45,
-    )
+    if any(token in lowered for token in ("sleep", "nap", "rest", "recovered", "break")):
+        return ParseResult(
+            impact=ParsedImpact(
+                event_summary=summary,
+                event_type="rest",
+                mental_delta=15,
+                physical_delta=10,
+                focus_mode="recovered",
+                tags=["recovery"],
+                should_offer_pull_hint=False,
+                confidence=0.7,
+            ),
+            status="success",
+        )
+
+    if any(token in lowered for token in ("walk", "ride", "run", "exercise", "workout")):
+        return ParseResult(
+            impact=ParsedImpact(
+                event_summary=summary,
+                event_type="exercise",
+                mental_delta=10,
+                physical_delta=-15,
+                focus_mode="recovered",
+                tags=["movement", "recovery"],
+                should_offer_pull_hint=True,
+                confidence=0.7,
+            ),
+            status="success",
+        )
+
+    if event.source in {"github", "calendar", "strava"}:
+        return ParseResult(
+            impact=ParsedImpact(
+                event_summary=summary,
+                event_type=event.source,
+                mental_delta=0,
+                physical_delta=0,
+                focus_mode="unknown",
+                tags=[event.source],
+                should_offer_pull_hint=False,
+                confidence=0.45,
+            ),
+            status="fallback",
+        )
+
+    if text:
+        return ParseResult(
+            impact=ParsedImpact(
+                event_summary=summary,
+                event_type="other",
+                mental_delta=0,
+                physical_delta=0,
+                focus_mode="unknown",
+                tags=[],
+                should_offer_pull_hint=False,
+                confidence=0.3,
+            ),
+            status="fallback",
+        )
+
+    return ParseResult(impact=None, status="failed")
 
 
 def parse_event_log(db: Session, event_id: UUID | str) -> dict[str, Any]:
@@ -101,12 +156,21 @@ def parse_event_log(db: Session, event_id: UUID | str) -> dict[str, Any]:
     if event is None:
         raise ValueError(f"event {event_id} not found")
 
-    impact = _parse_from_text(event.raw_text, event.source)
-    event.parsed_impact = impact.as_dict()
-    event.parse_status = "fallback"
+    result = _parse_from_event(event)
+    event.parsed_impact = result.impact.as_dict() if result.impact is not None else {}
+    event.parse_status = result.status
     db.add(event)
     db.commit()
     db.refresh(event)
+    log_event(
+        logger,
+        logging.INFO,
+        "event parsed",
+        event_id=event.event_id,
+        user_id=event.user_id,
+        parse_status=event.parse_status,
+        event_type=event.parsed_impact.get("event_type") if event.parsed_impact else None,
+    )
     return event.parsed_impact
 
 
@@ -127,6 +191,17 @@ def apply_state_patch_from_event(
         db.refresh(event)
 
     state = _ensure_user_state(db)
+    if event.parse_status == "failed" or not event.parsed_impact:
+        log_event(
+            logger,
+            logging.INFO,
+            "state patch skipped after parse failure",
+            event_id=event.event_id,
+            user_id=state.user_id,
+            parse_status=event.parse_status,
+            state_version=state.state_version,
+        )
+        return _snapshot_from_model(state)
 
     impact = event.parsed_impact
     for _ in range(max_retries):
@@ -168,6 +243,15 @@ def apply_state_patch_from_event(
                 )
             )
             db.commit()
+            log_event(
+                logger,
+                logging.INFO,
+                "state patch applied",
+                event_id=event.event_id,
+                user_id=updated_state.user_id,
+                parse_status=event.parse_status,
+                state_version=updated_state.state_version,
+            )
             return _snapshot_from_model(updated_state)
 
         db.rollback()

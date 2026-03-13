@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 
+from app.core.logging import log_event
 from app.db.session import SessionLocal
 from app.services.event_processing import apply_state_patch_from_event
 from app.workers.celery_app import celery_app
@@ -15,14 +16,31 @@ logger = logging.getLogger(__name__)
 def apply_state_patch(event_id: str) -> dict[str, str]:
     """Apply a parsed event impact onto the current state snapshot."""
 
-    logger.info("apply_state_patch task received event_id=%s", event_id)
+    log_event(logger, logging.INFO, "state patch task started", event_id=event_id)
     with SessionLocal() as session:
         snapshot = apply_state_patch_from_event(session, event_id)
 
-    return {
+    from app.workers.tasks_push_eval import evaluate_push_opportunities
+
+    if getattr(celery_app.conf, "task_always_eager", False):
+        evaluate_push_opportunities(event_id)
+    else:
+        evaluate_push_opportunities.delay(event_id)
+
+    result = {
         "status": "applied",
         "event_id": event_id,
         "focus_mode": snapshot.focus_mode,
         "mental_energy": str(snapshot.mental_energy),
         "physical_energy": str(snapshot.physical_energy),
     }
+    log_event(
+        logger,
+        logging.INFO,
+        "state patch task completed",
+        event_id=event_id,
+        focus_mode=snapshot.focus_mode,
+        mental_energy=snapshot.mental_energy,
+        physical_energy=snapshot.physical_energy,
+    )
+    return result

@@ -23,6 +23,7 @@ router = APIRouter(prefix="/recommendations", tags=["recommendations"])
 
 
 @router.get("/pull", response_model=RecommendationPullResponse, status_code=status.HTTP_200_OK)
+@router.get("/next", response_model=RecommendationPullResponse, status_code=status.HTTP_200_OK)
 def get_recommendations_pull(
     request: Request,
     limit: int = Query(default=2, ge=1, le=3),
