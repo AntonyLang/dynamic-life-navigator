@@ -5,16 +5,20 @@ This file tracks the first integration-pass findings. Items are grouped by the c
 ## frontend
 
 ### Open
-- Browser-side manual confirmation is still pending for:
-  - timeline status progression to `synced`
-  - dev panel refresh visibility after reset/create node
-  - recommendation load vs feedback error copy in a real page session
-  - Scope: integration follow-up work, not an identified contract or backend bug.
+- Explicit browser-side failure-copy forcing is still pending for:
+  - recommendation `load_failed`
+  - recommendation `feedback_failed`
+  - Scope: validation follow-up only. Normal success flows and empty fallback were manually confirmed; only deliberate error-path display remains unforced in-browser.
 
 ### Resolved
 - `vite dev` can be started successfully for live integration on this machine when launched from the approved command path.
   - Result: the React shell is reachable on `http://127.0.0.1:4173`, and the Vite proxy to `http://127.0.0.1:8000` is functioning.
   - Impact: live frontend/backend integration is no longer blocked by the earlier `EPERM` observation.
+- Browser-side visual confirmation has now been completed for:
+  - timeline progression to `synced`
+  - dev panel refresh visibility after reset
+  - brief panel rendering and refresh
+  - accepted / snoozed / dismissed recommendation feedback flows
 
 ## backend
 
@@ -25,6 +29,9 @@ This file tracks the first integration-pass findings. Items are grouped by the c
 - Local worker-off mode previously stalled after raw event ingest because `ENABLE_WORKER_DISPATCH=false` skipped parse/state/push entirely.
   - Fix: HTTP ingest routes now schedule an in-process FastAPI background pipeline when Celery dispatch is disabled.
   - Result: local chat/webhook flows can advance `event_logs -> state -> recommendation/push` without Redis/Celery.
+- Real worker-on mode has now been verified with Redis + Celery enabled.
+  - Result: `chat -> state -> recommendations -> feedback -> brief` behaves consistently with worker-off mode, while keeping request handling ack-only.
+  - Impact: the async execution path is no longer only theoretically wired; it has been exercised end to end in the local environment.
 
 ## contract
 
@@ -33,6 +40,8 @@ This file tracks the first integration-pass findings. Items are grouped by the c
 
 ### Resolved
 - none in the first live pass
+- No contract drift was found between direct API usage and the Vite proxy path during the Step 22 smoke pass.
+  - Result: the frontend can keep consuming the current stable response shapes without a compatibility shim.
 
 ## async-consistency
 
@@ -46,11 +55,15 @@ This file tracks the first integration-pass findings. Items are grouped by the c
 - An immediate `GET /state` after `POST /chat/messages` can still return the pre-event snapshot, and that is expected under the current ack + background-task model.
   - Proxy-based live smoke against `http://127.0.0.1:4173/api/v1/...` confirmed convergence on the first poll in the frontend-style reconcile loop.
   - Result: frontend polling is required behavior here, not a contract drift.
+- The same converge-after-ack behavior has now been confirmed in worker-on mode with a real Celery worker.
+  - Result: the shell's reconcile loop does not need mode-specific logic for local background tasks versus Celery.
 
 ## ux-copy
 
 ### Open
-- none identified in the first live pass
+- No product bug identified, but one deterministic-parser limitation remains visible in manual use:
+  - Chinese freeform updates can fall through to `fallback` parse status and only update `recent_context`, while equivalent English keyword-driven messages currently produce energy/focus changes.
+  - This is a known MVP parser limitation, not a worker-on integration regression.
 
 ### Resolved
 - none in the first live pass

@@ -100,8 +100,12 @@ These are the next likely engineering moves after MVP:
 
 ## Recommended next phase after MVP
 
-1. Frontend integration against the stable API surface
-2. schema-first LLM structured output for parsing/profile/rendering
+Frontend integration against the stable API surface has now been completed for the MVP shell.
+
+The next priorities are:
+
+1. schema-first LLM structured output for parsing/profile/rendering
+2. multilingual / broader deterministic parser coverage where MVP heuristics are currently too narrow
 3. real push delivery channel and delivery audit outcomes
 4. replay / rebuild tooling over `event_logs`
 
@@ -110,6 +114,10 @@ These are the next likely engineering moves after MVP:
 Latest local verification status:
 
 - full test suite passes through the local junction path
-- current count: `43 passed`
+- current backend count: `44 passed`
+- frontend integration has been validated through:
+  - frontend tests
+  - direct API/proxy smoke
+  - manual browser walkthrough
 - application uses real PostgreSQL locally
 - initial migration has been applied to the local `dln` database

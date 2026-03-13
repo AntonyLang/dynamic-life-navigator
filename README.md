@@ -57,6 +57,15 @@ $env:ENABLE_WORKER_DISPATCH='true'
 celery -A app.workers.celery_app:celery_app worker -l info -P solo
 ```
 
+Step 22 integration verification was completed in both local async modes:
+- `ENABLE_WORKER_DISPATCH=false`: FastAPI background pipeline advances `event_logs -> state -> weak push` after the ack
+- `ENABLE_WORKER_DISPATCH=true`: Redis + Celery worker path advances the same loop and preserves the same frontend reconcile model
+
+For Windows local development, the verified worker-on combination is:
+- API on `http://127.0.0.1:8000`
+- Redis running through `docker compose up -d redis`
+- Celery worker started with `-P solo`
+
 ## Run the frontend shell
 
 The repository now includes a React + Vite thin client under `frontend/` for MVP integration work.
@@ -79,6 +88,7 @@ npm.cmd run dev
 The Vite proxy forwards `/api/*` to the local FastAPI server, so no extra CORS setup is required for local development.
 That proxy-only behavior is local-dev convenience, not a production CORS policy. For any non-local deployment, backend CORS rules still need to be configured explicitly.
 The Step 20 shell hardening pass keeps slash-command routing (`/pull`, `/brief`) centralized in the app layer, and the dev panel now keeps a rolling history of the latest five debug events for easier joint frontend-backend debugging.
+Step 22 integration validation also re-checked the shell against the live Vite proxy on `http://127.0.0.1:4173/api/v1/...`.
 
 First-pass frontend/backend integration artifacts live in:
 - `docs/frontend-backend-integration-checklist.md`
@@ -125,6 +135,14 @@ cd frontend
 npm.cmd run test
 npm.cmd run build
 ```
+
+Integration verification status after Step 22:
+- backend full suite: `44 passed`
+- frontend test suite: `20 passed`
+- frontend build: passed
+- direct API smoke: passed on `127.0.0.1:8000`
+- Vite proxy smoke: passed on `127.0.0.1:4173`
+- worker-on Celery path: passed with Redis + `celery ... -P solo`
 
 If `pytest` fails with `PermissionError: [WinError 5]` on `E:\Antony\Documents`, run it through the local junction path instead:
 

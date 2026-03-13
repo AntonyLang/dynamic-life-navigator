@@ -7,7 +7,13 @@ This checklist tracks the first real integration pass between the React shell an
 - Backend automated verification: `44 passed`
 - Frontend automated verification: `20 passed`
 - Frontend production build: passed
-- Real API smoke pass completed against a live local uvicorn instance on `127.0.0.1:8010`
+- Full backend suite re-run from a clean baseline and confirmed to leave `user_state` clean
+- Real API smoke pass completed against a live local uvicorn instance on `127.0.0.1:8000`
+- Real proxy smoke pass completed against the Vite shell proxy on `http://127.0.0.1:4173/api/v1/...`
+- Real worker-on smoke pass completed with:
+  - `ENABLE_WORKER_DISPATCH=true`
+  - Redis from `docker compose`
+  - Celery worker using `-P solo`
 - Local smoke confirmed:
   - `POST /api/v1/chat/messages`
   - `GET /api/v1/state`
@@ -50,7 +56,10 @@ This checklist tracks the first real integration pass between the React shell an
   - `event_logs`, `recommendation_records`, `recommendation_feedback` are queryable by those IDs
 - First-pass status:
   - API side passed
-  - browser-side manual confirmation still pending
+  - browser-side visual confirmation later passed in manual walkthrough:
+    - debug panel showed `request_id`
+    - chat ACK exposed `event_id`
+    - recommendation feedback exposed `recommendation_id`
 
 ## Phase B: five golden flows
 
@@ -73,6 +82,8 @@ This checklist tracks the first real integration pass between the React shell an
 - First-pass status:
   - passed in live API smoke after local background pipeline fallback was added
   - passed again through the frontend proxy path on `http://127.0.0.1:4173/api/v1/...` when using the shell's short-poll reconcile model
+  - passed again in worker-on mode with Redis + Celery; the second state poll converged to the post-chat snapshot under the same reconcile window
+  - browser-side walkthrough also visually confirmed the timeline reaching `synced` in both worker-off and worker-on checks
 
 ### 2. Pull recommendation flow
 - Steps:
@@ -89,6 +100,7 @@ This checklist tracks the first real integration pass between the React shell an
 - First-pass status:
   - passed in live API smoke with a temporary node created through `POST /api/v1/nodes`
   - passed again through the frontend proxy path
+  - passed again in worker-on mode after the chat-driven state update converged
 
 ### 3. Brief flow
 - Steps:
@@ -103,6 +115,7 @@ This checklist tracks the first real integration pass between the React shell an
 - First-pass status:
   - passed in live API smoke
   - passed again through the frontend proxy path
+  - passed again in worker-on mode
 
 ### 4. Recommendation feedback flow
 - Steps:
@@ -120,7 +133,12 @@ This checklist tracks the first real integration pass between the React shell an
 - First-pass status:
   - `accepted` path passed in live API smoke
   - `accepted` path also passed through the frontend proxy path
-  - browser-side `dismissed -> repull` still pending as a live UI pass
+  - `accepted` path also passed in worker-on mode
+  - browser-side walkthrough confirmed:
+    - `accepted`
+    - `snoozed`
+    - `dismissed -> repull`
+  - with the current tiny two-node manual test pool, repull can legitimately land on empty fallback after cooldown/exposure rules apply
 
 ### 5. Dev panel state/node flow
 - Steps:
@@ -140,7 +158,11 @@ This checklist tracks the first real integration pass between the React shell an
 - First-pass status:
   - API side passed in live smoke
   - proxy/API side also passed against the live Vite shell proxy
-  - browser-side manual panel pass still pending
+  - data-side behavior also passed in worker-on mode via reset -> create node -> repull/brief API checks
+  - browser-side walkthrough confirmed:
+    - reset visibly updated the state bar
+    - create-node effects were visible in recommendation/brief flows
+    - debug history retained the latest five events
 
 ## Phase C: async consistency checks
 
@@ -159,6 +181,23 @@ This checklist tracks the first real integration pass between the React shell an
   - passed after adding a FastAPI `BackgroundTasks` fallback
   - clarified in live proxy smoke: an immediate post-chat `GET /state` may still show the pre-event snapshot, but the first short poll converged correctly
 
+### Worker-on Celery integration mode
+- Steps:
+  - set `ENABLE_WORKER_DISPATCH=true`
+  - run Redis locally
+  - start a real Celery worker
+  - submit chat input, then poll `GET /api/v1/state`
+- Expected UI:
+  - frontend reconcile window still converges without changing shell behavior
+- Expected API:
+  - request path stays ack-style
+  - Celery path replaces the local FastAPI background pipeline as the main async executor
+- Expected DB:
+  - event parse/state/recommendation side effects appear through worker execution
+- First-pass status:
+  - passed in direct API smoke and again through the Vite proxy path
+  - no behavior drift observed versus worker-off mode
+
 ### Stale/error semantics
 - Steps:
   - simulate state fetch failure or stale snapshot age
@@ -173,4 +212,5 @@ This checklist tracks the first real integration pass between the React shell an
   - no extra side effects required
 - First-pass status:
   - covered by automated frontend tests
-  - browser-side manual visual pass still pending
+  - browser-side walkthrough confirmed normal success states and empty fallback behavior
+  - explicit failure-copy forcing (`load_failed` vs `feedback_failed`) remains covered by automated frontend tests rather than a manually induced browser error
