@@ -1,3 +1,5 @@
+import "../../test/setup";
+
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
@@ -16,6 +18,7 @@ describe("DevPanel", () => {
         onResetState={onResetState}
         onCreateNode={vi.fn()}
         lastDebugEvent={null}
+        debugEvents={[]}
         busy={false}
       />,
     );
@@ -46,6 +49,7 @@ describe("DevPanel", () => {
         onResetState={vi.fn()}
         onCreateNode={onCreateNode}
         lastDebugEvent={null}
+        debugEvents={[]}
         busy={false}
       />,
     );

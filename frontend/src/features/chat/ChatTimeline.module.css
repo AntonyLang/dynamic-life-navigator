@@ -85,6 +85,13 @@
   border: 1px solid rgba(96, 116, 155, 0.16);
 }
 
+.retryButton:disabled,
+.feedbackButton:disabled,
+.secondaryFeedbackButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .feedbackButton {
   background: var(--accent-soft);
   color: var(--accent-strong);
@@ -135,4 +142,11 @@
   border-radius: var(--radius-md);
   background: rgba(252, 247, 235, 0.92);
   color: var(--warning);
+}
+
+.errorBlock {
+  padding: 14px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 241, 241, 0.92);
+  color: var(--danger);
 }

@@ -77,7 +77,11 @@ export function ChatTimeline({ entries, onRetryMessage, onRecommendationFeedback
               <span className={styles.status}>{entry.status}</span>
             </div>
 
-            {entry.emptyState ? (
+            {entry.status === "load_failed" ? (
+              <div className={styles.errorBlock}>
+                Recommendation pull failed: {entry.errorMessage ?? "Please try again from the sidebar."}
+              </div>
+            ) : entry.emptyState ? (
               <>
                 <div className={styles.fallback}>{entry.fallbackMessage ?? "No strong candidate right now."}</div>
                 <div className={styles.quickChips}>
@@ -103,6 +107,7 @@ export function ChatTimeline({ entries, onRetryMessage, onRecommendationFeedback
                       <button
                         className={styles.feedbackButton}
                         type="button"
+                        disabled={entry.status === "feedback_submitting"}
                         onClick={() => void onRecommendationFeedback(entry.recommendationId, item.node_id, "accepted")}
                       >
                         Accept
@@ -110,6 +115,7 @@ export function ChatTimeline({ entries, onRetryMessage, onRecommendationFeedback
                       <button
                         className={styles.secondaryFeedbackButton}
                         type="button"
+                        disabled={entry.status === "feedback_submitting"}
                         onClick={() => void onRecommendationFeedback(entry.recommendationId, item.node_id, "snoozed")}
                       >
                         Snooze
@@ -117,11 +123,15 @@ export function ChatTimeline({ entries, onRetryMessage, onRecommendationFeedback
                       <button
                         className={styles.secondaryFeedbackButton}
                         type="button"
+                        disabled={entry.status === "feedback_submitting"}
                         onClick={() => void onRecommendationFeedback(entry.recommendationId, item.node_id, "dismissed")}
                       >
                         Swap
                       </button>
                     </div>
+                    {entry.status === "feedback_failed" ? (
+                      <div className={styles.error}>Feedback could not be recorded. Try again.</div>
+                    ) : null}
                   </div>
                 ))}
               </div>

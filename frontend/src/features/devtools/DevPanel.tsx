@@ -1,9 +1,9 @@
 import { useState } from "react";
 
-import styles from "./DevPanel.module.css";
 import type { DebugEvent } from "../../app/store";
 import type { ActionNodeCreateRequest, StateResetRequest } from "../../lib/api/types";
 import { maybeNumber, parseTags } from "../../lib/forms";
+import styles from "./DevPanel.module.css";
 
 interface DevPanelProps {
   open: boolean;
@@ -11,10 +11,19 @@ interface DevPanelProps {
   onResetState: (payload: StateResetRequest) => Promise<void> | void;
   onCreateNode: (payload: ActionNodeCreateRequest) => Promise<void> | void;
   lastDebugEvent: DebugEvent | null;
+  debugEvents: DebugEvent[];
   busy: boolean;
 }
 
-export function DevPanel({ open, onToggle, onResetState, onCreateNode, lastDebugEvent, busy }: DevPanelProps) {
+export function DevPanel({
+  open,
+  onToggle,
+  onResetState,
+  onCreateNode,
+  lastDebugEvent,
+  debugEvents,
+  busy,
+}: DevPanelProps) {
   const [mentalEnergy, setMentalEnergy] = useState("55");
   const [physicalEnergy, setPhysicalEnergy] = useState("45");
   const [reason, setReason] = useState("frontend manual reset");
@@ -142,15 +151,37 @@ export function DevPanel({ open, onToggle, onResetState, onCreateNode, lastDebug
             <h3 className={styles.sectionTitle}>Latest Debug Event</h3>
             {lastDebugEvent ? (
               <div className={styles.debug}>
-                <div>label: {lastDebugEvent.label}</div>
-                <div>request_id: {lastDebugEvent.requestId ?? "--"}</div>
-                <div>recommendation_id: {lastDebugEvent.recommendationId ?? "--"}</div>
-                <div>event_id: {lastDebugEvent.eventId ?? "--"}</div>
+                <div>
+                  label: <code>{lastDebugEvent.label}</code>
+                </div>
+                <div>
+                  request_id: <code>{lastDebugEvent.requestId ?? "--"}</code>
+                </div>
+                <div>
+                  recommendation_id: <code>{lastDebugEvent.recommendationId ?? "--"}</code>
+                </div>
+                <div>
+                  event_id: <code>{lastDebugEvent.eventId ?? "--"}</code>
+                </div>
                 <pre>{JSON.stringify(lastDebugEvent.response, null, 2)}</pre>
               </div>
             ) : (
               <div className={styles.placeholder}>No debug event yet.</div>
             )}
+
+            {debugEvents.length > 0 ? (
+              <div className={styles.history}>
+                <h4 className={styles.historyTitle}>Recent events</h4>
+                <ul className={styles.historyList}>
+                  {debugEvents.map((event) => (
+                    <li key={`${event.createdAt}-${event.label}`} className={styles.historyItem}>
+                      <code>{event.label}</code>
+                      <span>{new Date(event.createdAt).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </section>
         </div>
       ) : null}

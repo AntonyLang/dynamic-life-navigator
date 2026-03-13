@@ -19,19 +19,6 @@ export function ChatInput({ value, onChange, onSend, onPull, onBrief, onQuickFil
     if (!text) {
       return;
     }
-
-    if (text === "/pull") {
-      onChange("");
-      await onPull();
-      return;
-    }
-
-    if (text === "/brief") {
-      onChange("");
-      await onBrief();
-      return;
-    }
-
     await onSend(text);
   }
 

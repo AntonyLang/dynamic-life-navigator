@@ -67,6 +67,7 @@ npm.cmd run dev
 ```
 
 The Vite proxy forwards `/api/*` to the local FastAPI server, so no extra CORS setup is required for local development.
+The Step 20 shell hardening pass keeps slash-command routing (`/pull`, `/brief`) centralized in the app layer, and the dev panel now keeps a rolling history of the latest five debug events for easier joint frontend-backend debugging.
 
 ## Quick E2E Check
 

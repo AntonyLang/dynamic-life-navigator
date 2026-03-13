@@ -2,6 +2,15 @@ import { create } from "zustand";
 
 import type { RecommendationBriefResponse, RecommendationItem, RecommendationPullResponse } from "../lib/api/types";
 
+export type RecommendationTimelineStatus =
+  | "loading"
+  | "ready"
+  | "empty"
+  | "load_failed"
+  | "feedback_submitting"
+  | "feedback_done"
+  | "feedback_failed";
+
 export type TimelineEntry =
   | {
       id: string;
@@ -30,7 +39,8 @@ export type TimelineEntry =
       emptyState: boolean;
       items: RecommendationItem[];
       fallbackMessage: string | null;
-      status: "loading" | "ready" | "empty" | "feedback_submitting" | "feedback_done" | "feedback_failed";
+      status: RecommendationTimelineStatus;
+      errorMessage?: string;
     };
 
 export interface DebugEvent {
@@ -50,6 +60,7 @@ interface AppStore {
   isBriefOpen: boolean;
   isDevOpen: boolean;
   lastDebugEvent: DebugEvent | null;
+  debugEvents: DebugEvent[];
   setInputValue: (value: string) => void;
   appendEntry: (entry: TimelineEntry) => void;
   updateEntry: (id: string, updater: (entry: TimelineEntry) => TimelineEntry) => void;
@@ -69,7 +80,10 @@ const initialState = {
   isBriefOpen: false,
   isDevOpen: true,
   lastDebugEvent: null as DebugEvent | null,
+  debugEvents: [] as DebugEvent[],
 };
+
+const DEBUG_HISTORY_LIMIT = 5;
 
 export const useAppStore = create<AppStore>((set) => ({
   ...initialState,
@@ -83,6 +97,10 @@ export const useAppStore = create<AppStore>((set) => ({
   setLatestBrief: (brief) => set({ latestBrief: brief }),
   setBriefOpen: (open) => set({ isBriefOpen: open }),
   setDevOpen: (open) => set({ isDevOpen: open }),
-  logDebugEvent: (event) => set({ lastDebugEvent: event }),
+  logDebugEvent: (event) =>
+    set((state) => ({
+      lastDebugEvent: event,
+      debugEvents: [event, ...state.debugEvents].slice(0, DEBUG_HISTORY_LIMIT),
+    })),
   resetForTests: () => set(initialState),
 }));

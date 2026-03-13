@@ -1,3 +1,5 @@
+import "../../test/setup";
+
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
@@ -5,7 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ChatInput } from "./ChatInput";
 
 describe("ChatInput", () => {
-  it("routes /pull to the pull handler", async () => {
+  it("submits /pull through the single send handler", async () => {
     const user = userEvent.setup();
     const onSend = vi.fn();
     const onPull = vi.fn();
@@ -25,12 +27,12 @@ describe("ChatInput", () => {
 
     await user.click(screen.getByRole("button", { name: "Send" }));
 
-    expect(onPull).toHaveBeenCalledTimes(1);
-    expect(onSend).not.toHaveBeenCalled();
+    expect(onSend).toHaveBeenCalledWith("/pull");
+    expect(onPull).not.toHaveBeenCalled();
     expect(onBrief).not.toHaveBeenCalled();
   });
 
-  it("routes /brief to the brief handler", async () => {
+  it("submits /brief through the single send handler", async () => {
     const user = userEvent.setup();
     const onSend = vi.fn();
     const onPull = vi.fn();
@@ -49,8 +51,8 @@ describe("ChatInput", () => {
 
     await user.click(screen.getByRole("button", { name: "Send" }));
 
-    expect(onBrief).toHaveBeenCalledTimes(1);
-    expect(onSend).not.toHaveBeenCalled();
+    expect(onSend).toHaveBeenCalledWith("/brief");
+    expect(onBrief).not.toHaveBeenCalled();
     expect(onPull).not.toHaveBeenCalled();
   });
 
@@ -76,5 +78,30 @@ describe("ChatInput", () => {
     expect(onSend).toHaveBeenCalledWith("Need one clear next step.");
     expect(onPull).not.toHaveBeenCalled();
     expect(onBrief).not.toHaveBeenCalled();
+  });
+
+  it("keeps explicit pull and brief buttons wired directly", async () => {
+    const user = userEvent.setup();
+    const onSend = vi.fn();
+    const onPull = vi.fn();
+    const onBrief = vi.fn();
+
+    render(
+      <ChatInput
+        value=""
+        onChange={vi.fn()}
+        onSend={onSend}
+        onPull={onPull}
+        onBrief={onBrief}
+        onQuickFill={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Pull recommendation" }));
+    await user.click(screen.getByRole("button", { name: "Open brief" }));
+
+    expect(onPull).toHaveBeenCalledTimes(1);
+    expect(onBrief).toHaveBeenCalledTimes(1);
+    expect(onSend).not.toHaveBeenCalled();
   });
 });

@@ -1,3 +1,5 @@
+import "../../test/setup";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { apiClient } from "./client";
