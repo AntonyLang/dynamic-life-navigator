@@ -48,7 +48,10 @@ def parse_event_log(db: Session, event_id: UUID | str) -> dict[str, Any]:
         event_type=event.parsed_impact.get("event_type") if event.parsed_impact else None,
         parser_provider=decision.metadata.provider,
         parser_version=decision.metadata.parser_version,
+        prompt_version=decision.metadata.prompt_version,
+        model_name=decision.metadata.model_name,
         fallback_reason=decision.metadata.fallback_reason,
+        provider_error=decision.metadata.error_detail,
     )
     return event.parsed_impact
 

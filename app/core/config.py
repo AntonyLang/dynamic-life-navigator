@@ -33,6 +33,32 @@ class AppSettings(BaseSettings):
         default=False,
         description="Enable actual Celery task dispatch from request handlers",
     )
+    parser_provider: Literal[
+        "deterministic",
+        "structured_stub",
+        "structured_model_shell",
+        "openai_responses",
+        "gemini_direct",
+    ] = Field(
+        default="deterministic",
+        description="Internal parser provider selection; deterministic remains the safe default",
+    )
+    structured_parser_validation_retries: int = Field(
+        default=1,
+        ge=0,
+        le=3,
+        description="Number of retry attempts for schema validation before falling back to deterministic parsing",
+    )
+    structured_parser_model_name: str = Field(
+        default="unconfigured-structured-parser",
+        description="Reserved model name for the future structured parser provider",
+    )
+    structured_parser_timeout_seconds: float = Field(
+        default=30.0,
+        gt=0.0,
+        le=300.0,
+        description="Timeout budget in seconds for a future model-backed structured parser call",
+    )
 
     database_url: str = Field(
         default="postgresql+psycopg://postgres:postgres@localhost:5432/dln",
@@ -56,6 +82,19 @@ class AppSettings(BaseSettings):
     )
 
     sentry_dsn: str | None = Field(default=None, description="Optional Sentry DSN")
+    openai_api_key: str | None = Field(default=None, description="Optional OpenAI API key for structured parser calls")
+    openai_base_url: str = Field(
+        default="https://api.openai.com/v1",
+        description="Base URL for OpenAI Responses API-compatible structured parser calls",
+    )
+    gemini_api_key: str | None = Field(
+        default=None,
+        description="Optional Gemini Developer API key for AI Studio-backed structured parser calls",
+    )
+    gemini_base_url: str = Field(
+        default="https://generativelanguage.googleapis.com/v1beta",
+        description="Base URL for Gemini Developer API generateContent calls",
+    )
 
     @property
     def effective_celery_broker_url(self) -> str:

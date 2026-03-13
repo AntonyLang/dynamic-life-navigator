@@ -28,6 +28,7 @@ class ParserMetadataDTO(BaseModel):
     prompt_version: str | None = None
     model_name: str | None = None
     fallback_reason: str | None = None
+    error_detail: str | None = None
 
 
 class ParserDecisionDTO(BaseModel):
