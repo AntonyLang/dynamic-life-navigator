@@ -1,6 +1,6 @@
-"""
-Database integration package.
+"""Database integration package."""
 
-Phase 0: placeholder for engine and session management.
-"""
+from app.db.base import Base
+from app.db.session import SessionLocal, engine, get_db_session
 
+__all__ = ["Base", "SessionLocal", "engine", "get_db_session"]
