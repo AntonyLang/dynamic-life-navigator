@@ -1,0 +1,61 @@
+.shell {
+  display: grid;
+  gap: 14px;
+}
+
+.topline {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.title {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.hint {
+  color: var(--text-subtle);
+  font-size: 0.92rem;
+}
+
+.quickRow,
+.footer {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.chip,
+.ghostButton,
+.primaryButton {
+  border-radius: 999px;
+  border: 1px solid rgba(89, 108, 145, 0.16);
+  padding: 9px 14px;
+  background: rgba(255, 255, 255, 0.84);
+  transition: transform 120ms ease;
+}
+
+.ghostButton:hover,
+.primaryButton:hover,
+.chip:hover {
+  transform: translateY(-1px);
+}
+
+.primaryButton {
+  border: 0;
+  color: white;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
+}
+
+.textarea {
+  min-height: 124px;
+  width: 100%;
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(94, 115, 154, 0.18);
+  background: rgba(255, 255, 255, 0.96);
+  resize: vertical;
+}

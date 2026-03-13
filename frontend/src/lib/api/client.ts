@@ -34,7 +34,7 @@ function mapApiError(response: Response, body: unknown, requestId: string | null
     body && typeof body === "object" && "detail" in body ? (body as { detail: unknown }).detail : null;
 
   if (response.status === 409) {
-    return new ApiError("消息已提交过。", {
+    return new ApiError("Message was already submitted.", {
       status: response.status,
       requestId,
       code: "duplicate_message",
@@ -67,7 +67,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<ApiSuccess<
   } catch (error) {
     window.clearTimeout(timeout);
     if (error instanceof DOMException && error.name === "AbortError") {
-      throw new ApiError("请求超时。", {
+      throw new ApiError("Request timed out.", {
         status: 0,
         requestId: null,
         code: "timeout",
@@ -75,7 +75,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<ApiSuccess<
       });
     }
 
-    throw new ApiError("网络请求失败。", {
+    throw new ApiError("Network request failed.", {
       status: 0,
       requestId: null,
       code: "network_error",

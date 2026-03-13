@@ -1,0 +1,64 @@
+:root {
+  color-scheme: light;
+  font-family: "Aptos", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: #1b2230;
+  background:
+    radial-gradient(circle at top left, rgba(112, 168, 255, 0.2), transparent 28%),
+    radial-gradient(circle at top right, rgba(255, 199, 117, 0.18), transparent 24%),
+    linear-gradient(180deg, #f5f8ff 0%, #eef2f8 100%);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  --panel-bg: rgba(255, 255, 255, 0.82);
+  --panel-border: rgba(104, 124, 163, 0.18);
+  --panel-shadow: 0 18px 50px rgba(44, 66, 106, 0.12);
+  --accent: #2859c5;
+  --accent-soft: rgba(40, 89, 197, 0.1);
+  --accent-strong: #143e9d;
+  --text-main: #1b2230;
+  --text-subtle: #58657d;
+  --danger: #b64848;
+  --danger-soft: rgba(182, 72, 72, 0.1);
+  --success: #25724a;
+  --success-soft: rgba(37, 114, 74, 0.12);
+  --warning: #8b5f10;
+  --warning-soft: rgba(139, 95, 16, 0.12);
+  --radius-xl: 28px;
+  --radius-lg: 20px;
+  --radius-md: 14px;
+  --radius-sm: 10px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  min-height: 100vh;
+  color: var(--text-main);
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+a {
+  color: inherit;
+}

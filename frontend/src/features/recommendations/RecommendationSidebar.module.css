@@ -1,0 +1,64 @@
+.card {
+  padding: 18px;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--panel-border);
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.topline {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.title {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.hint {
+  margin-top: 6px;
+  color: var(--text-subtle);
+  font-size: 0.92rem;
+}
+
+.button {
+  border-radius: 999px;
+  border: 0;
+  padding: 10px 14px;
+  font-weight: 700;
+  color: white;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
+}
+
+.placeholder,
+.fallback,
+.item {
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: var(--radius-md);
+  background: rgba(247, 250, 255, 0.92);
+  border: 1px solid rgba(96, 116, 155, 0.12);
+}
+
+.itemTitle {
+  margin: 0;
+}
+
+.tags,
+.quickRow {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.tag,
+.quickButton {
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(96, 116, 155, 0.14);
+  background: rgba(255, 255, 255, 0.88);
+  font-size: 0.82rem;
+}

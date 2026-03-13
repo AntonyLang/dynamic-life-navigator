@@ -47,6 +47,27 @@ uvicorn app.main:app --reload
 celery -A app.workers.celery_app:celery_app worker -l info
 ```
 
+## Run the frontend shell
+
+The repository now includes a React + Vite thin client under `frontend/` for MVP integration work.
+
+1. Keep the API running on `http://127.0.0.1:8000`.
+2. Install frontend dependencies:
+
+```powershell
+cd frontend
+npm.cmd install
+```
+
+3. Start the Vite dev server:
+
+```powershell
+cd frontend
+npm.cmd run dev
+```
+
+The Vite proxy forwards `/api/*` to the local FastAPI server, so no extra CORS setup is required for local development.
+
 ## Quick E2E Check
 
 With the API running locally, you can exercise the current MVP backend in this order:
@@ -79,6 +100,14 @@ Invoke-RestMethod -Method Get -Uri http://127.0.0.1:8000/api/v1/brief
 
 ```bash
 pytest
+```
+
+Frontend verification:
+
+```powershell
+cd frontend
+npm.cmd run test
+npm.cmd run build
 ```
 
 If `pytest` fails with `PermissionError: [WinError 5]` on `E:\Antony\Documents`, run it through the local junction path instead:

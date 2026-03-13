@@ -1,11 +1,11 @@
-export function formatDateTime(value: string | null | undefined): string {
+export function formatDateTime(value: string | null | undefined) {
   if (!value) {
-    return "—";
+    return "--";
   }
 
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
-    return "—";
+    return "--";
   }
 
   return new Intl.DateTimeFormat("zh-CN", {

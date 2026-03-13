@@ -1,0 +1,138 @@
+.shell {
+  display: grid;
+  gap: 14px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.title {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.hint {
+  color: var(--text-subtle);
+  font-size: 0.92rem;
+}
+
+.empty {
+  padding: 22px;
+  border-radius: var(--radius-lg);
+  background: rgba(250, 252, 255, 0.95);
+  border: 1px dashed rgba(96, 116, 155, 0.22);
+  color: var(--text-subtle);
+}
+
+.entry {
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(96, 116, 155, 0.14);
+}
+
+.user {
+  background: rgba(227, 238, 255, 0.95);
+}
+
+.assistant {
+  background: rgba(250, 252, 255, 0.92);
+}
+
+.systemInfo {
+  background: rgba(241, 248, 255, 0.92);
+}
+
+.systemError {
+  background: rgba(255, 241, 241, 0.92);
+}
+
+.entryMeta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+  color: var(--text-subtle);
+}
+
+.entryText {
+  margin: 10px 0 0;
+  white-space: pre-wrap;
+}
+
+.status {
+  font-weight: 700;
+}
+
+.error {
+  margin-top: 10px;
+  color: var(--danger);
+  font-size: 0.92rem;
+}
+
+.retryButton,
+.feedbackButton,
+.secondaryFeedbackButton,
+.quickChip {
+  border-radius: 999px;
+  padding: 8px 13px;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(96, 116, 155, 0.16);
+}
+
+.feedbackButton {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.recommendationCard {
+  display: grid;
+  gap: 12px;
+}
+
+.recommendationList {
+  display: grid;
+  gap: 12px;
+}
+
+.recommendationItem {
+  padding: 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(96, 116, 155, 0.12);
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.tags {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.tag {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(40, 89, 197, 0.08);
+  color: var(--accent-strong);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.actions,
+.quickChips {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.fallback {
+  padding: 14px;
+  border-radius: var(--radius-md);
+  background: rgba(252, 247, 235, 0.92);
+  color: var(--warning);
+}
