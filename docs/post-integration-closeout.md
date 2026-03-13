@@ -20,7 +20,7 @@ That means the project is no longer in a "backend ready, frontend still theoreti
 - FastAPI + PostgreSQL + Redis + Celery stack is in place
 - core fact/snapshot/recommendation tables are live
 - full backend suite passes locally
-- latest baseline: `44 passed`
+- latest baseline: `53 passed`
 
 ### Frontend baseline
 - React + Vite thin client is in place
@@ -74,26 +74,16 @@ We did not deliberately force browser-visible error states for:
 
 Those states are covered by frontend automated tests, but not yet manually forced in-browser.
 
-### 2. Deterministic parser language coverage
-The current parser is still keyword-driven and English-leaning.
-
-Observed during manual testing:
-- a Chinese freeform update fell through to `fallback`
-- it updated `recent_context`
-- it did not change energy/focus
-
-This is a known parser limitation, not an integration failure.
-
-### 3. Push remains decision-only
+### 2. Push remains decision-only
 Weak push records are generated, but there is still no real delivery channel.
 
 ## Recommended next phase
 
 Now that MVP integration is closed enough to move on, the next priorities should be:
 
-1. parser quality expansion
-   - improve deterministic multilingual coverage first
-   - then consider schema-first LLM structured parsing
+1. schema-first LLM structured parsing
+   - keep the current deterministic multilingual rules as the fallback baseline
+   - add runtime validation, retry, and deterministic fallback
 
 2. real push delivery
    - keep audit records
@@ -102,7 +92,10 @@ Now that MVP integration is closed enough to move on, the next priorities should
 3. replay / rebuild tooling
    - make the fact/snapshot separation operationally useful
 
-4. selective frontend refinement
+4. broader deterministic fallback coverage
+   - keep extending only where real usage still falls through
+
+5. selective frontend refinement
    - only after parser/push priorities are clearer
    - keep the shell thin unless a real product surface is chosen
 

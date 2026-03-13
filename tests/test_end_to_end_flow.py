@@ -16,6 +16,7 @@ from app.models.recommendation_record import RecommendationRecord
 from app.models.user_state import UserState
 from app.services.event_processing import apply_state_patch_from_event, parse_event_log
 from app.services import event_ingestion
+from app.workers.local_pipeline import run_local_event_pipeline
 
 settings = get_settings()
 
@@ -117,6 +118,7 @@ def test_chat_message_route_advances_state_via_local_background_pipeline(
     client = TestClient(app)
     client_message_id = f"e2e-local-pipeline-{uuid4()}"
     event_id = None
+    zh_text = "\u521a\u505a\u5b8c\u5f88\u91cd\u7684\u8111\u529b\u6d3b\uff0c\u60f3\u5148\u7f13\u4e00\u4e0b\u3002"
 
     monkeypatch.setattr(event_ingestion.settings, "enable_worker_dispatch", False, raising=False)
 
@@ -140,7 +142,7 @@ def test_chat_message_route_advances_state_via_local_background_pipeline(
                 json={
                     "channel": "frontend_web_shell",
                     "message_type": "text",
-                    "text": "I am drained after debugging all afternoon.",
+                    "text": zh_text,
                     "client_message_id": client_message_id,
                     "occurred_at": "2026-03-13T09:00:00+08:00",
                 },
@@ -153,13 +155,83 @@ def test_chat_message_route_advances_state_via_local_background_pipeline(
                 state_response = client.get("/api/v1/state")
                 assert state_response.status_code == 200
                 state_body = state_response.json()["state"]
-                if state_body["recent_context"] == "I am drained after debugging all afternoon.":
+                if state_body["recent_context"] == zh_text:
                     break
                 time.sleep(0.25)
 
             assert state_body is not None
             assert state_body["focus_mode"] == "tired"
-            assert state_body["recent_context"] == "I am drained after debugging all afternoon."
+            assert state_body["mental_energy"] == 65
+            assert state_body["recent_context"] == zh_text
+
+            session.expire_all()
+            refreshed_state = session.get(UserState, settings.default_user_id)
+            assert refreshed_state is not None
+            assert refreshed_state.source_last_event_id == event_id
+            assert refreshed_state.state_version >= baseline_state_version + 1
+        finally:
+            if event_id is not None:
+                cleanup_db_artifacts.event_ids(event_id)
+            session.commit()
+
+
+def test_chat_message_route_advances_state_via_worker_dispatch_path_with_chinese_input(
+    monkeypatch,
+    cleanup_db_artifacts,
+    user_state_guard,
+):
+    client = TestClient(app)
+    client_message_id = f"e2e-worker-dispatch-{uuid4()}"
+    event_id = None
+    queued_event_ids: list[str] = []
+    zh_text = "\u521a\u505a\u5b8c\u5f88\u91cd\u7684\u8111\u529b\u6d3b\uff0c\u60f3\u5148\u7f13\u4e00\u4e0b\u3002"
+
+    monkeypatch.setattr(event_ingestion.settings, "enable_worker_dispatch", True, raising=False)
+    monkeypatch.setattr(event_ingestion.parse_event_log, "delay", lambda event_id: queued_event_ids.append(event_id))
+
+    with SessionLocal() as session:
+        state = session.get(UserState, settings.default_user_id)
+        state.mental_energy = 85
+        state.physical_energy = 85
+        state.focus_mode = "recovered"
+        state.recent_context = "integration baseline"
+        state.updated_at = datetime.now(timezone.utc)
+        state.source_last_event_id = None
+        state.source_last_event_at = None
+        session.add(state)
+        session.commit()
+        baseline_state_version = state.state_version
+
+        try:
+            response = client.post(
+                "/api/v1/chat/messages",
+                json={
+                    "channel": "frontend_web_shell",
+                    "message_type": "text",
+                    "text": zh_text,
+                    "client_message_id": client_message_id,
+                    "occurred_at": "2026-03-13T09:05:00+08:00",
+                },
+            )
+            assert response.status_code == 200
+            event_id = UUID(response.json()["event_id"])
+            assert queued_event_ids == [str(event_id)]
+
+            run_local_event_pipeline(str(event_id))
+
+            state_body = None
+            for _ in range(6):
+                state_response = client.get("/api/v1/state")
+                assert state_response.status_code == 200
+                state_body = state_response.json()["state"]
+                if state_body["recent_context"] == zh_text:
+                    break
+                time.sleep(0.25)
+
+            assert state_body is not None
+            assert state_body["focus_mode"] == "tired"
+            assert state_body["mental_energy"] == 65
+            assert state_body["recent_context"] == zh_text
 
             session.expire_all()
             refreshed_state = session.get(UserState, settings.default_user_id)

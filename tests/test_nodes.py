@@ -72,6 +72,34 @@ def test_create_action_node_applies_heuristic_prefill():
             session.commit()
 
 
+def test_create_action_node_applies_chinese_light_admin_prefill():
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/v1/nodes",
+        json={
+            "drive_type": "project",
+            "title": "\u6574\u7406\u90ae\u7bb1\u5f52\u6863",
+            "tags": [],
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    node_id = UUID(body["node"]["node_id"])
+
+    with SessionLocal() as session:
+        try:
+            node = session.scalar(select(ActionNode).where(ActionNode.node_id == node_id))
+            assert node is not None
+            assert node.mental_energy_required <= 35
+            assert node.physical_energy_required >= 30
+            assert "light_admin" in node.recommended_context_tags
+            assert node.profiling_status == "pending"
+        finally:
+            session.execute(delete(ActionNode).where(ActionNode.node_id == node_id))
+            session.commit()
+
+
 def test_profile_action_node_completes_async_backfill():
     client = TestClient(app)
 
@@ -101,7 +129,39 @@ def test_profile_action_node_completes_async_backfill():
             assert node.mental_energy_required >= 70
             assert node.estimated_minutes >= 45
             assert "deep_focus" in node.recommended_context_tags
-            assert node.ai_context["profile_method"] == "deterministic_async_v1"
+            assert node.ai_context["profile_method"] == "deterministic_async_v2"
+        finally:
+            session.execute(delete(ActionNode).where(ActionNode.node_id == node_id))
+            session.commit()
+
+
+def test_profile_action_node_supports_chinese_deep_focus_hint():
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/v1/nodes",
+        json={
+            "drive_type": "project",
+            "title": "\u8c03\u8bd5 parser \u5e76\u5199\u62a5\u544a",
+            "summary": "\u68c0\u67e5\u5931\u8d25\u6a21\u5f0f\uff0c\u5b8c\u6210\u8c03\u8bd5\uff0c\u518d\u5199\u4e00\u4efd\u7b80\u77ed\u62a5\u544a\u3002",
+            "tags": [],
+        },
+    )
+    assert response.status_code == 200
+    body = response.json()
+    node_id = UUID(body["node"]["node_id"])
+
+    with SessionLocal() as session:
+        try:
+            result = profile_action_node(session, str(node_id))
+            assert result["status"] == "completed"
+
+            node = session.get(ActionNode, node_id)
+            assert node is not None
+            assert node.mental_energy_required >= 72
+            assert node.estimated_minutes >= 45
+            assert "deep_focus" in node.recommended_context_tags
+            assert "cognitive_work_signal" in node.ai_context["profile_signals"]
         finally:
             session.execute(delete(ActionNode).where(ActionNode.node_id == node_id))
             session.commit()

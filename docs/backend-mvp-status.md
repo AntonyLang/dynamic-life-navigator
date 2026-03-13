@@ -16,6 +16,12 @@ That means the core loop is present and test-covered:
 6. persist recommendation records and feedback
 7. evaluate weak push opportunities
 
+Parser quality has also moved beyond the original English-only MVP heuristic:
+
+- deterministic rule-driven parsing now covers the first Chinese/English multilingual signal set
+- fallback behavior still exists, but equivalent mental-load / recovery / movement expressions no longer depend on English-only keywords
+- node profiling now shares the same signal vocabulary baseline as event parsing
+
 ## Implemented MVP capabilities
 
 ### Runtime and ops
@@ -102,19 +108,21 @@ These are the next likely engineering moves after MVP:
 
 Frontend integration against the stable API surface has now been completed for the MVP shell.
 
+The deterministic multilingual parser expansion has also been completed as the first post-MVP quality pass.
+
 The next priorities are:
 
 1. schema-first LLM structured output for parsing/profile/rendering
-2. multilingual / broader deterministic parser coverage where MVP heuristics are currently too narrow
-3. real push delivery channel and delivery audit outcomes
-4. replay / rebuild tooling over `event_logs`
+2. real push delivery channel and delivery audit outcomes
+3. replay / rebuild tooling over `event_logs`
+4. broader deterministic parser coverage beyond the first multilingual signal pack where heuristics are still intentionally narrow
 
 ## Verification baseline
 
 Latest local verification status:
 
 - full test suite passes through the local junction path
-- current backend count: `44 passed`
+- current backend count: `53 passed`
 - frontend integration has been validated through:
   - frontend tests
   - direct API/proxy smoke

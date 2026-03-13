@@ -5,10 +5,7 @@ This file tracks the first integration-pass findings. Items are grouped by the c
 ## frontend
 
 ### Open
-- Explicit browser-side failure-copy forcing is still pending for:
-  - recommendation `load_failed`
-  - recommendation `feedback_failed`
-  - Scope: validation follow-up only. Normal success flows and empty fallback were manually confirmed; only deliberate error-path display remains unforced in-browser.
+- none in the current integration baseline
 
 ### Resolved
 - `vite dev` can be started successfully for live integration on this machine when launched from the approved command path.
@@ -61,9 +58,12 @@ This file tracks the first integration-pass findings. Items are grouped by the c
 ## ux-copy
 
 ### Open
-- No product bug identified, but one deterministic-parser limitation remains visible in manual use:
-  - Chinese freeform updates can fall through to `fallback` parse status and only update `recent_context`, while equivalent English keyword-driven messages currently produce energy/focus changes.
-  - This is a known MVP parser limitation, not a worker-on integration regression.
+- Explicit browser-side failure-copy forcing is still pending for:
+  - recommendation `load_failed`
+  - recommendation `feedback_failed`
+  - Scope: validation follow-up only. Normal success flows and empty fallback were manually confirmed; only deliberate error-path display remains unforced in-browser.
 
 ### Resolved
-- none in the first live pass
+- Chinese freeform chat updates no longer have to fall through the deterministic parser fallback path to update `recent_context` only.
+  - Result: equivalent Chinese and English mental-load / recovery / movement expressions now converge to the same state-shaping rules in both worker-off and worker-on flows.
+  - Impact: the first live integration gap found during manual browser walkthrough has been closed without changing the external API surface.
