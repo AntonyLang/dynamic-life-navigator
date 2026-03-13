@@ -16,27 +16,15 @@ from app.services.event_processing import apply_state_patch_from_event, parse_ev
 settings = get_settings()
 
 
-def test_parse_and_apply_state_patch_updates_snapshot():
+def test_parse_and_apply_state_patch_updates_snapshot(cleanup_db_artifacts, user_state_guard):
     event_id = uuid4()
 
     with SessionLocal() as session:
-        created_state = False
         state = session.get(UserState, settings.default_user_id)
-        if state is None:
-            state = UserState(user_id=settings.default_user_id, mental_energy=60, physical_energy=70, focus_mode="unknown")
-            session.add(state)
-            session.commit()
-            session.refresh(state)
-            created_state = True
-
-        original_version = state.state_version
-        original_mental = state.mental_energy
-        original_physical = state.physical_energy
-        original_focus = state.focus_mode
-        original_recent_context = state.recent_context
-        original_updated_at = state.updated_at
-        original_event_id = state.source_last_event_id
-        original_event_at = state.source_last_event_at
+        original_state = user_state_guard
+        original_version = original_state["state_version"]
+        original_mental = original_state["mental_energy"]
+        original_physical = original_state["physical_energy"]
 
         event = EventLog(
             event_id=event_id,
@@ -75,45 +63,15 @@ def test_parse_and_apply_state_patch_updates_snapshot():
             assert refreshed_state.physical_energy == original_physical
             assert history is not None
         finally:
-            session.execute(delete(StateHistory).where(StateHistory.event_id == event_id))
-            session.execute(delete(EventLog).where(EventLog.event_id == event_id))
-            if created_state:
-                session.execute(delete(UserState).where(UserState.user_id == settings.default_user_id))
-            else:
-                restored_state = session.get(UserState, settings.default_user_id)
-                restored_state.state_version = original_version
-                restored_state.mental_energy = original_mental
-                restored_state.physical_energy = original_physical
-                restored_state.focus_mode = original_focus
-                restored_state.recent_context = original_recent_context
-                restored_state.updated_at = original_updated_at
-                restored_state.source_last_event_id = original_event_id
-                restored_state.source_last_event_at = original_event_at
-                session.add(restored_state)
-            session.commit()
+            cleanup_db_artifacts.event_ids(event_id)
 
 
-def test_failed_parse_keeps_event_and_skips_state_mutation():
+def test_failed_parse_keeps_event_and_skips_state_mutation(cleanup_db_artifacts, user_state_guard):
     event_id = uuid4()
 
     with SessionLocal() as session:
         state = session.get(UserState, settings.default_user_id)
-        if state is None:
-            state = UserState(user_id=settings.default_user_id)
-            session.add(state)
-            session.commit()
-            session.refresh(state)
-
-        original_state = {
-            "mental_energy": state.mental_energy,
-            "physical_energy": state.physical_energy,
-            "focus_mode": state.focus_mode,
-            "state_version": state.state_version,
-            "recent_context": state.recent_context,
-            "updated_at": state.updated_at,
-            "source_last_event_id": state.source_last_event_id,
-            "source_last_event_at": state.source_last_event_at,
-        }
+        original_state = user_state_guard
 
         session.add(
             EventLog(
@@ -144,41 +102,15 @@ def test_failed_parse_keeps_event_and_skips_state_mutation():
             assert refreshed_state.state_version == original_state["state_version"]
             assert history is None
         finally:
-            session.execute(delete(EventLog).where(EventLog.event_id == event_id))
-            restored_state = session.get(UserState, settings.default_user_id)
-            restored_state.mental_energy = original_state["mental_energy"]
-            restored_state.physical_energy = original_state["physical_energy"]
-            restored_state.focus_mode = original_state["focus_mode"]
-            restored_state.state_version = original_state["state_version"]
-            restored_state.recent_context = original_state["recent_context"]
-            restored_state.updated_at = original_state["updated_at"]
-            restored_state.source_last_event_id = original_state["source_last_event_id"]
-            restored_state.source_last_event_at = original_state["source_last_event_at"]
-            session.add(restored_state)
-            session.commit()
+            cleanup_db_artifacts.event_ids(event_id)
 
 
-def test_apply_state_patch_retries_on_compare_and_swap_conflict(monkeypatch):
+def test_apply_state_patch_retries_on_compare_and_swap_conflict(monkeypatch, cleanup_db_artifacts, user_state_guard):
     event_id = uuid4()
 
     with SessionLocal() as session:
         state = session.get(UserState, settings.default_user_id)
-        if state is None:
-            state = UserState(user_id=settings.default_user_id, mental_energy=60, physical_energy=70, focus_mode="unknown")
-            session.add(state)
-            session.commit()
-            session.refresh(state)
-
-        original_state = {
-            "mental_energy": state.mental_energy,
-            "physical_energy": state.physical_energy,
-            "focus_mode": state.focus_mode,
-            "state_version": state.state_version,
-            "recent_context": state.recent_context,
-            "updated_at": state.updated_at,
-            "source_last_event_id": state.source_last_event_id,
-            "source_last_event_at": state.source_last_event_at,
-        }
+        original_state = user_state_guard
 
         session.add(
             EventLog(
@@ -222,16 +154,4 @@ def test_apply_state_patch_retries_on_compare_and_swap_conflict(monkeypatch):
             assert refreshed_state.state_version == original_state["state_version"] + 1
             assert history is not None
         finally:
-            session.execute(delete(StateHistory).where(StateHistory.event_id == event_id))
-            session.execute(delete(EventLog).where(EventLog.event_id == event_id))
-            restored_state = session.get(UserState, settings.default_user_id)
-            restored_state.mental_energy = original_state["mental_energy"]
-            restored_state.physical_energy = original_state["physical_energy"]
-            restored_state.focus_mode = original_state["focus_mode"]
-            restored_state.state_version = original_state["state_version"]
-            restored_state.recent_context = original_state["recent_context"]
-            restored_state.updated_at = original_state["updated_at"]
-            restored_state.source_last_event_id = original_state["source_last_event_id"]
-            restored_state.source_last_event_at = original_state["source_last_event_at"]
-            session.add(restored_state)
-            session.commit()
+            cleanup_db_artifacts.event_ids(event_id)

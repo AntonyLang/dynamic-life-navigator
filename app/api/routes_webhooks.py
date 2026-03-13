@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Body, Depends, Request, status
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, Request, status
 from sqlalchemy.orm import Session
 
 from app.core.request_context import get_request_id_from_request
@@ -19,9 +19,16 @@ router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 def post_webhook(
     source: WebhookSource,
     request: Request,
+    background_tasks: BackgroundTasks,
     payload: dict[str, Any] = Body(default_factory=dict),
     db: Session = Depends(get_db_session),
 ) -> WebhookIngestResponse:
     """Accept a third-party webhook payload."""
 
-    return ingest_webhook_event_with_db(db, get_request_id_from_request(request), source, payload)
+    return ingest_webhook_event_with_db(
+        db,
+        get_request_id_from_request(request),
+        source,
+        payload,
+        background_tasks=background_tasks,
+    )

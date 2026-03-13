@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import time
 from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
@@ -10,41 +11,37 @@ from app.core.config import get_settings
 from app.db.session import SessionLocal
 from app.main import app
 from app.models.action_node import ActionNode
-from app.models.event_log import EventLog
 from app.models.recommendation_feedback import RecommendationFeedback
 from app.models.recommendation_record import RecommendationRecord
-from app.models.state_history import StateHistory
 from app.models.user_state import UserState
 from app.services.event_processing import apply_state_patch_from_event, parse_event_log
+from app.services import event_ingestion
 
 settings = get_settings()
 
 
-def test_ingest_parse_state_and_recommendation_flow():
+def test_ingest_parse_state_and_recommendation_flow(monkeypatch, cleanup_db_artifacts, user_state_guard):
     client = TestClient(app)
     client_message_id = f"e2e-{uuid4()}"
     node_id = uuid4()
+    node_title = f"Take a small recovery walk {str(node_id)[:8]}"
     recommendation_id = None
     event_id = None
 
+    monkeypatch.setattr(event_ingestion.settings, "enable_worker_dispatch", True, raising=False)
+
     with SessionLocal() as session:
         state = session.get(UserState, settings.default_user_id)
-        if state is None:
-            state = UserState(user_id=settings.default_user_id)
-            session.add(state)
-            session.commit()
-            session.refresh(state)
-
-        original_state = {
-            "mental_energy": state.mental_energy,
-            "physical_energy": state.physical_energy,
-            "focus_mode": state.focus_mode,
-            "state_version": state.state_version,
-            "recent_context": state.recent_context,
-            "updated_at": state.updated_at,
-            "source_last_event_id": state.source_last_event_id,
-            "source_last_event_at": state.source_last_event_at,
-        }
+        original_state = user_state_guard
+        state.mental_energy = 85
+        state.physical_energy = 85
+        state.focus_mode = "recovered"
+        state.recent_context = "integration baseline"
+        state.updated_at = datetime.now(timezone.utc)
+        state.source_last_event_id = None
+        state.source_last_event_at = None
+        session.add(state)
+        session.commit()
 
         session.add(
             ActionNode(
@@ -52,9 +49,9 @@ def test_ingest_parse_state_and_recommendation_flow():
                 user_id=settings.default_user_id,
                 drive_type="project",
                 status="active",
-                title="Take a small recovery walk",
-                priority_score=70,
-                dynamic_urgency_score=20,
+                title=node_title,
+                priority_score=95,
+                dynamic_urgency_score=95,
                 mental_energy_required=10,
                 physical_energy_required=10,
                 confidence_level="medium",
@@ -63,6 +60,7 @@ def test_ingest_parse_state_and_recommendation_flow():
         session.commit()
 
         try:
+            monkeypatch.setattr(event_ingestion.parse_event_log, "delay", lambda event_id: None)
             ingest_response = client.post(
                 "/api/v1/events/ingest",
                 json={
@@ -86,8 +84,9 @@ def test_ingest_parse_state_and_recommendation_flow():
             recommendation_id = UUID(body["recommendation_id"])
 
             assert body["empty_state"] is False
-            assert body["items"][0]["title"] == "Take a small recovery walk"
+            assert body["items"][0]["title"] == node_title
 
+            session.expire_all()
             refreshed_state = session.get(UserState, settings.default_user_id)
             assert refreshed_state is not None
             assert refreshed_state.source_last_event_id == event_id
@@ -105,17 +104,69 @@ def test_ingest_parse_state_and_recommendation_flow():
                     )
                 )
             if event_id is not None:
-                session.execute(delete(StateHistory).where(StateHistory.event_id == event_id))
-                session.execute(delete(EventLog).where(EventLog.event_id == event_id))
+                cleanup_db_artifacts.event_ids(event_id)
             session.execute(delete(ActionNode).where(ActionNode.node_id == node_id))
-            restored = session.get(UserState, settings.default_user_id)
-            restored.mental_energy = original_state["mental_energy"]
-            restored.physical_energy = original_state["physical_energy"]
-            restored.focus_mode = original_state["focus_mode"]
-            restored.state_version = original_state["state_version"]
-            restored.recent_context = original_state["recent_context"]
-            restored.updated_at = original_state["updated_at"]
-            restored.source_last_event_id = original_state["source_last_event_id"]
-            restored.source_last_event_at = original_state["source_last_event_at"]
-            session.add(restored)
+            session.commit()
+
+
+def test_chat_message_route_advances_state_via_local_background_pipeline(
+    monkeypatch,
+    cleanup_db_artifacts,
+    user_state_guard,
+):
+    client = TestClient(app)
+    client_message_id = f"e2e-local-pipeline-{uuid4()}"
+    event_id = None
+
+    monkeypatch.setattr(event_ingestion.settings, "enable_worker_dispatch", False, raising=False)
+
+    with SessionLocal() as session:
+        state = session.get(UserState, settings.default_user_id)
+        original_state = user_state_guard
+        state.mental_energy = 85
+        state.physical_energy = 85
+        state.focus_mode = "recovered"
+        state.recent_context = "integration baseline"
+        state.updated_at = datetime.now(timezone.utc)
+        state.source_last_event_id = None
+        state.source_last_event_at = None
+        session.add(state)
+        session.commit()
+        baseline_state_version = state.state_version
+
+        try:
+            response = client.post(
+                "/api/v1/chat/messages",
+                json={
+                    "channel": "frontend_web_shell",
+                    "message_type": "text",
+                    "text": "I am drained after debugging all afternoon.",
+                    "client_message_id": client_message_id,
+                    "occurred_at": "2026-03-13T09:00:00+08:00",
+                },
+            )
+            assert response.status_code == 200
+            event_id = UUID(response.json()["event_id"])
+
+            state_body = None
+            for _ in range(6):
+                state_response = client.get("/api/v1/state")
+                assert state_response.status_code == 200
+                state_body = state_response.json()["state"]
+                if state_body["recent_context"] == "I am drained after debugging all afternoon.":
+                    break
+                time.sleep(0.25)
+
+            assert state_body is not None
+            assert state_body["focus_mode"] == "tired"
+            assert state_body["recent_context"] == "I am drained after debugging all afternoon."
+
+            session.expire_all()
+            refreshed_state = session.get(UserState, settings.default_user_id)
+            assert refreshed_state is not None
+            assert refreshed_state.source_last_event_id == event_id
+            assert refreshed_state.state_version >= baseline_state_version + 1
+        finally:
+            if event_id is not None:
+                cleanup_db_artifacts.event_ids(event_id)
             session.commit()

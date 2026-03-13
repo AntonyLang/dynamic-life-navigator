@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, status
 from sqlalchemy.orm import Session
 
 from app.core.request_context import get_request_id_from_request
@@ -17,8 +17,9 @@ router = APIRouter(prefix="/events", tags=["events"])
 def post_event_ingest(
     payload: ChatMessageRequest,
     request: Request,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db_session),
 ) -> ChatMessageResponse:
     """Accept the MVP primary input through a stable event-ingest endpoint."""
 
-    return ingest_chat_message(db, get_request_id_from_request(request), payload)
+    return ingest_chat_message(db, get_request_id_from_request(request), payload, background_tasks=background_tasks)

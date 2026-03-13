@@ -19,7 +19,7 @@ from app.workers import tasks_state
 settings = get_settings()
 
 
-def test_push_evaluation_generates_record_for_strong_candidate():
+def test_push_evaluation_generates_record_for_strong_candidate(user_state_guard):
     node_id = uuid4()
     trigger_event_id = uuid4()
 
@@ -42,23 +42,6 @@ def test_push_evaluation_generates_record_for_strong_candidate():
         session.commit()
 
         state = session.get(UserState, settings.default_user_id)
-        if state is None:
-            state = UserState(user_id=settings.default_user_id)
-            session.add(state)
-            session.commit()
-            session.refresh(state)
-
-        original_state = {
-            "mental_energy": state.mental_energy,
-            "physical_energy": state.physical_energy,
-            "focus_mode": state.focus_mode,
-            "state_version": state.state_version,
-            "recent_context": state.recent_context,
-            "updated_at": state.updated_at,
-            "source_last_event_id": state.source_last_event_id,
-            "source_last_event_at": state.source_last_event_at,
-            "do_not_disturb_until": state.do_not_disturb_until,
-        }
 
         state.mental_energy = 85
         state.physical_energy = 85
@@ -125,21 +108,10 @@ def test_push_evaluation_generates_record_for_strong_candidate():
             session.execute(delete(NodeAnnotation).where(NodeAnnotation.node_id == node_id))
             session.execute(delete(ActionNode).where(ActionNode.node_id == node_id))
             session.execute(delete(EventLog).where(EventLog.event_id == trigger_event_id))
-            restored_state = session.get(UserState, settings.default_user_id)
-            restored_state.mental_energy = original_state["mental_energy"]
-            restored_state.physical_energy = original_state["physical_energy"]
-            restored_state.focus_mode = original_state["focus_mode"]
-            restored_state.state_version = original_state["state_version"]
-            restored_state.recent_context = original_state["recent_context"]
-            restored_state.updated_at = original_state["updated_at"]
-            restored_state.source_last_event_id = original_state["source_last_event_id"]
-            restored_state.source_last_event_at = original_state["source_last_event_at"]
-            restored_state.do_not_disturb_until = original_state["do_not_disturb_until"]
-            session.add(restored_state)
             session.commit()
 
 
-def test_push_evaluation_skips_when_do_not_disturb_active():
+def test_push_evaluation_skips_when_do_not_disturb_active(user_state_guard):
     trigger_event_id = uuid4()
 
     with SessionLocal() as session:
@@ -152,23 +124,6 @@ def test_push_evaluation_skips_when_do_not_disturb_active():
         session.commit()
 
         state = session.get(UserState, settings.default_user_id)
-        if state is None:
-            state = UserState(user_id=settings.default_user_id)
-            session.add(state)
-            session.commit()
-            session.refresh(state)
-
-        original_state = {
-            "mental_energy": state.mental_energy,
-            "physical_energy": state.physical_energy,
-            "focus_mode": state.focus_mode,
-            "state_version": state.state_version,
-            "recent_context": state.recent_context,
-            "updated_at": state.updated_at,
-            "source_last_event_id": state.source_last_event_id,
-            "source_last_event_at": state.source_last_event_at,
-            "do_not_disturb_until": state.do_not_disturb_until,
-        }
 
         state.do_not_disturb_until = datetime.now(timezone.utc) + timedelta(hours=1)
         session.add(state)
@@ -209,17 +164,6 @@ def test_push_evaluation_skips_when_do_not_disturb_active():
                 )
             )
             session.execute(delete(EventLog).where(EventLog.event_id == trigger_event_id))
-            restored_state = session.get(UserState, settings.default_user_id)
-            restored_state.mental_energy = original_state["mental_energy"]
-            restored_state.physical_energy = original_state["physical_energy"]
-            restored_state.focus_mode = original_state["focus_mode"]
-            restored_state.state_version = original_state["state_version"]
-            restored_state.recent_context = original_state["recent_context"]
-            restored_state.updated_at = original_state["updated_at"]
-            restored_state.source_last_event_id = original_state["source_last_event_id"]
-            restored_state.source_last_event_at = original_state["source_last_event_at"]
-            restored_state.do_not_disturb_until = original_state["do_not_disturb_until"]
-            session.add(restored_state)
             session.commit()
 
 

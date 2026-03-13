@@ -1,7 +1,6 @@
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
-
 from app.main import app
 
 
@@ -26,33 +25,36 @@ def test_state_route_returns_contract_shape():
     )
 
 
-def test_events_ingest_alias_returns_ack_shape():
+def test_events_ingest_alias_returns_ack_shape(cleanup_db_artifacts, user_state_guard):
     client = TestClient(app)
     client_message_id = f"contract-shape-msg-{uuid4()}"
 
-    response = client.post(
-        "/api/v1/events/ingest",
-        json={
-            "channel": "desktop_plugin",
-            "message_type": "text",
-            "text": "Need a quick checkpoint.",
-            "client_message_id": client_message_id,
-            "occurred_at": "2026-03-13T09:00:00+08:00",
-        },
-    )
+    try:
+        response = client.post(
+            "/api/v1/events/ingest",
+            json={
+                "channel": "desktop_plugin",
+                "message_type": "text",
+                "text": "Need a quick checkpoint.",
+                "client_message_id": client_message_id,
+                "occurred_at": "2026-03-13T09:00:00+08:00",
+            },
+        )
 
-    assert response.status_code == 200
-    body = response.json()
-    assert body["request_id"]
-    assert body["event_id"]
-    assert body["accepted"] is True
-    assert body["processing"] is True
-    assert "state" in body
-    assert "assistant_reply" in body
-    assert "suggest_next_action" in body
+        assert response.status_code == 200
+        body = response.json()
+        assert body["request_id"]
+        assert body["event_id"]
+        assert body["accepted"] is True
+        assert body["processing"] is True
+        assert "state" in body
+        assert "assistant_reply" in body
+        assert "suggest_next_action" in body
+    finally:
+        cleanup_db_artifacts.external_events(client_message_id, source="desktop_plugin")
 
 
-def test_events_ingest_duplicate_returns_conflict():
+def test_events_ingest_duplicate_returns_conflict(cleanup_db_artifacts, user_state_guard):
     client = TestClient(app)
     client_message_id = f"contract-shape-msg-{uuid4()}"
     payload = {
@@ -63,12 +65,15 @@ def test_events_ingest_duplicate_returns_conflict():
         "occurred_at": "2026-03-13T09:00:00+08:00",
     }
 
-    first = client.post("/api/v1/events/ingest", json=payload)
-    second = client.post("/api/v1/events/ingest", json=payload)
+    try:
+        first = client.post("/api/v1/events/ingest", json=payload)
+        second = client.post("/api/v1/events/ingest", json=payload)
 
-    assert first.status_code == 200
-    assert second.status_code == 409
-    assert second.json()["detail"] == "client_message_id already exists for this source"
+        assert first.status_code == 200
+        assert second.status_code == 409
+        assert second.json()["detail"] == "client_message_id already exists for this source"
+    finally:
+        cleanup_db_artifacts.external_events(client_message_id, source="desktop_plugin")
 
 
 def test_recommendation_next_alias_returns_pull_shape():

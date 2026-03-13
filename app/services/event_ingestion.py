@@ -9,7 +9,7 @@ from hashlib import sha256
 from typing import Any
 from uuid import uuid4
 
-from fastapi import HTTPException, status
+from fastapi import BackgroundTasks, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -27,10 +27,22 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
-def _enqueue_parse_task(event_id: str) -> None:
+def _enqueue_parse_task(event_id: str, background_tasks: BackgroundTasks | None = None) -> None:
     """Attempt to enqueue parse work without making the request path brittle."""
 
     if not settings.enable_worker_dispatch:
+        if background_tasks is not None:
+            from app.workers.local_pipeline import run_local_event_pipeline
+
+            background_tasks.add_task(run_local_event_pipeline, event_id)
+            log_event(
+                logger,
+                logging.INFO,
+                "worker dispatch disabled; scheduled local background pipeline",
+                event_id=event_id,
+            )
+            return
+
         log_event(logger, logging.INFO, "worker dispatch disabled; skipping parse enqueue", event_id=event_id)
         return
 
@@ -40,7 +52,12 @@ def _enqueue_parse_task(event_id: str) -> None:
         logger.exception("failed to enqueue parse task event_id=%s", event_id)
 
 
-def ingest_chat_message(db: Session, request_id: str, payload: ChatMessageRequest) -> ChatMessageResponse:
+def ingest_chat_message(
+    db: Session,
+    request_id: str,
+    payload: ChatMessageRequest,
+    background_tasks: BackgroundTasks | None = None,
+) -> ChatMessageResponse:
     """Persist a raw chat event and return an ack-style response."""
 
     event_id = uuid4()
@@ -94,7 +111,7 @@ def ingest_chat_message(db: Session, request_id: str, payload: ChatMessageReques
         parse_status="pending",
     )
 
-    _enqueue_parse_task(str(event_id))
+    _enqueue_parse_task(str(event_id), background_tasks=background_tasks)
     current_state = get_current_state(db)
 
     return ChatMessageResponse(
@@ -194,6 +211,7 @@ def ingest_webhook_event_with_db(
     request_id: str,
     source: str,
     payload: dict,
+    background_tasks: BackgroundTasks | None = None,
 ) -> WebhookIngestResponse:
     """Persist a raw webhook payload and return an idempotent ack."""
 
@@ -289,7 +307,7 @@ def ingest_webhook_event_with_db(
         )
 
     if not duplicate:
-        _enqueue_parse_task(str(event_id))
+        _enqueue_parse_task(str(event_id), background_tasks=background_tasks)
 
     return WebhookIngestResponse(
         request_id=request_id,

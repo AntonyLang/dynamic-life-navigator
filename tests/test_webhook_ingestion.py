@@ -5,15 +5,14 @@ from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
 from redis.exceptions import ConnectionError as RedisConnectionError
-from sqlalchemy import delete, select
+from sqlalchemy import select
 
 from app.db.session import SessionLocal
 from app.main import app
 from app.models.event_log import EventLog
 from app.services import event_ingestion
 
-
-def test_webhook_ingest_uses_payload_occurred_at(monkeypatch):
+def test_webhook_ingest_uses_payload_occurred_at(monkeypatch, cleanup_db_artifacts, user_state_guard):
     client = TestClient(app)
     payload = {
         "id": f"webhook-{uuid4()}",
@@ -33,11 +32,10 @@ def test_webhook_ingest_uses_payload_occurred_at(monkeypatch):
             assert event is not None
             assert event.occurred_at == datetime.fromisoformat("2026-03-13T09:15:00+08:00")
         finally:
-            session.execute(delete(EventLog).where(EventLog.event_id == event_id))
-            session.commit()
+            cleanup_db_artifacts.event_ids(event_id)
 
 
-def test_webhook_ingest_parses_unix_millisecond_timestamp(monkeypatch):
+def test_webhook_ingest_parses_unix_millisecond_timestamp(monkeypatch, cleanup_db_artifacts, user_state_guard):
     client = TestClient(app)
     payload = {
         "id": f"webhook-{uuid4()}",
@@ -57,11 +55,10 @@ def test_webhook_ingest_parses_unix_millisecond_timestamp(monkeypatch):
             assert event is not None
             assert event.occurred_at == datetime.fromtimestamp(1_741_829_200, tz=timezone.utc)
         finally:
-            session.execute(delete(EventLog).where(EventLog.event_id == event_id))
-            session.commit()
+            cleanup_db_artifacts.event_ids(event_id)
 
 
-def test_webhook_ingest_falls_back_to_now_when_payload_has_no_time(monkeypatch):
+def test_webhook_ingest_falls_back_to_now_when_payload_has_no_time(monkeypatch, cleanup_db_artifacts, user_state_guard):
     client = TestClient(app)
     payload = {
         "id": f"webhook-{uuid4()}",
@@ -82,11 +79,10 @@ def test_webhook_ingest_falls_back_to_now_when_payload_has_no_time(monkeypatch):
             assert event is not None
             assert before <= event.occurred_at <= after
         finally:
-            session.execute(delete(EventLog).where(EventLog.event_id == event_id))
-            session.commit()
+            cleanup_db_artifacts.event_ids(event_id)
 
 
-def test_webhook_ingest_redis_duplicate_returns_existing_event(monkeypatch):
+def test_webhook_ingest_redis_duplicate_returns_existing_event(monkeypatch, cleanup_db_artifacts, user_state_guard):
     client = TestClient(app)
     external_id = f"webhook-{uuid4()}"
     payload = {
@@ -112,11 +108,10 @@ def test_webhook_ingest_redis_duplicate_returns_existing_event(monkeypatch):
             rows = session.scalars(select(EventLog).where(EventLog.external_event_id == external_id)).all()
             assert len(rows) == 1
         finally:
-            session.execute(delete(EventLog).where(EventLog.external_event_id == external_id))
-            session.commit()
+            cleanup_db_artifacts.external_events(external_id, source="strava")
 
 
-def test_webhook_ingest_degrades_to_db_only_when_redis_unavailable(monkeypatch):
+def test_webhook_ingest_degrades_to_db_only_when_redis_unavailable(monkeypatch, cleanup_db_artifacts, user_state_guard):
     client = TestClient(app)
     payload = {
         "id": f"webhook-{uuid4()}",
@@ -137,5 +132,4 @@ def test_webhook_ingest_degrades_to_db_only_when_redis_unavailable(monkeypatch):
         try:
             assert session.get(EventLog, event_id) is not None
         finally:
-            session.execute(delete(EventLog).where(EventLog.event_id == event_id))
-            session.commit()
+            cleanup_db_artifacts.event_ids(event_id)

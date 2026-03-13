@@ -47,6 +47,16 @@ uvicorn app.main:app --reload
 celery -A app.workers.celery_app:celery_app worker -l info
 ```
 
+When `ENABLE_WORKER_DISPATCH=false`, HTTP ingest routes use an in-process FastAPI background pipeline for local development. That keeps the MVP event -> state -> recommendation loop moving even when Redis/Celery workers are not running.
+When `ENABLE_WORKER_DISPATCH=true`, the real Celery path is used instead and the request handlers only emit the ack plus task dispatch.
+
+On Windows, prefer the solo pool for local verification:
+
+```powershell
+$env:ENABLE_WORKER_DISPATCH='true'
+celery -A app.workers.celery_app:celery_app worker -l info -P solo
+```
+
 ## Run the frontend shell
 
 The repository now includes a React + Vite thin client under `frontend/` for MVP integration work.
@@ -67,7 +77,12 @@ npm.cmd run dev
 ```
 
 The Vite proxy forwards `/api/*` to the local FastAPI server, so no extra CORS setup is required for local development.
+That proxy-only behavior is local-dev convenience, not a production CORS policy. For any non-local deployment, backend CORS rules still need to be configured explicitly.
 The Step 20 shell hardening pass keeps slash-command routing (`/pull`, `/brief`) centralized in the app layer, and the dev panel now keeps a rolling history of the latest five debug events for easier joint frontend-backend debugging.
+
+First-pass frontend/backend integration artifacts live in:
+- `docs/frontend-backend-integration-checklist.md`
+- `docs/frontend-backend-integration-issues.md`
 
 ## Quick E2E Check
 

@@ -72,29 +72,13 @@ def test_brief_route_returns_persisted_summary():
             session.commit()
 
 
-def test_pull_feedback_flow_persists_records():
+def test_pull_feedback_flow_persists_records(user_state_guard):
     client = TestClient(app)
     node_ids: list = []
 
     with SessionLocal() as session:
         recommendation_id = None
         state = session.get(UserState, settings.default_user_id)
-        if state is None:
-            state = UserState(user_id=settings.default_user_id)
-            session.add(state)
-            session.commit()
-            session.refresh(state)
-
-        original_state = {
-            "mental_energy": state.mental_energy,
-            "physical_energy": state.physical_energy,
-            "focus_mode": state.focus_mode,
-            "state_version": state.state_version,
-            "recent_context": state.recent_context,
-            "updated_at": state.updated_at,
-            "source_last_event_id": state.source_last_event_id,
-            "source_last_event_at": state.source_last_event_at,
-        }
 
         state.mental_energy = 45
         state.physical_energy = 70
@@ -199,42 +183,16 @@ def test_pull_feedback_flow_persists_records():
                 )
             session.execute(delete(NodeAnnotation).where(NodeAnnotation.node_id.in_(node_ids)))
             session.execute(delete(ActionNode).where(ActionNode.node_id.in_(node_ids)))
-            restored_state = session.get(UserState, settings.default_user_id)
-            restored_state.mental_energy = original_state["mental_energy"]
-            restored_state.physical_energy = original_state["physical_energy"]
-            restored_state.focus_mode = original_state["focus_mode"]
-            restored_state.state_version = original_state["state_version"]
-            restored_state.recent_context = original_state["recent_context"]
-            restored_state.updated_at = original_state["updated_at"]
-            restored_state.source_last_event_id = original_state["source_last_event_id"]
-            restored_state.source_last_event_at = original_state["source_last_event_at"]
-            session.add(restored_state)
             session.commit()
 
 
-def test_rejected_feedback_updates_node_penalty_signal():
+def test_rejected_feedback_updates_node_penalty_signal(user_state_guard):
     client = TestClient(app)
     node_id = uuid4()
 
     with SessionLocal() as session:
         recommendation_id = None
         state = session.get(UserState, settings.default_user_id)
-        if state is None:
-            state = UserState(user_id=settings.default_user_id)
-            session.add(state)
-            session.commit()
-            session.refresh(state)
-
-        original_state = {
-            "mental_energy": state.mental_energy,
-            "physical_energy": state.physical_energy,
-            "focus_mode": state.focus_mode,
-            "state_version": state.state_version,
-            "recent_context": state.recent_context,
-            "updated_at": state.updated_at,
-            "source_last_event_id": state.source_last_event_id,
-            "source_last_event_at": state.source_last_event_at,
-        }
 
         state.mental_energy = 60
         state.physical_energy = 60
@@ -279,42 +237,16 @@ def test_rejected_feedback_updates_node_penalty_signal():
                     )
                 )
             session.execute(delete(ActionNode).where(ActionNode.node_id == node_id))
-            restored_state = session.get(UserState, settings.default_user_id)
-            restored_state.mental_energy = original_state["mental_energy"]
-            restored_state.physical_energy = original_state["physical_energy"]
-            restored_state.focus_mode = original_state["focus_mode"]
-            restored_state.state_version = original_state["state_version"]
-            restored_state.recent_context = original_state["recent_context"]
-            restored_state.updated_at = original_state["updated_at"]
-            restored_state.source_last_event_id = original_state["source_last_event_id"]
-            restored_state.source_last_event_at = original_state["source_last_event_at"]
-            session.add(restored_state)
             session.commit()
 
 
-def test_feedback_rejects_node_outside_recommendation():
+def test_feedback_rejects_node_outside_recommendation(user_state_guard):
     client = TestClient(app)
     node_ids: list = []
 
     with SessionLocal() as session:
         recommendation_id = None
         state = session.get(UserState, settings.default_user_id)
-        if state is None:
-            state = UserState(user_id=settings.default_user_id)
-            session.add(state)
-            session.commit()
-            session.refresh(state)
-
-        original_state = {
-            "mental_energy": state.mental_energy,
-            "physical_energy": state.physical_energy,
-            "focus_mode": state.focus_mode,
-            "state_version": state.state_version,
-            "recent_context": state.recent_context,
-            "updated_at": state.updated_at,
-            "source_last_event_id": state.source_last_event_id,
-            "source_last_event_at": state.source_last_event_at,
-        }
 
         state.mental_energy = 70
         state.physical_energy = 70
@@ -369,41 +301,15 @@ def test_feedback_rejects_node_outside_recommendation():
                     )
                 )
             session.execute(delete(ActionNode).where(ActionNode.node_id.in_(node_ids)))
-            restored_state = session.get(UserState, settings.default_user_id)
-            restored_state.mental_energy = original_state["mental_energy"]
-            restored_state.physical_energy = original_state["physical_energy"]
-            restored_state.focus_mode = original_state["focus_mode"]
-            restored_state.state_version = original_state["state_version"]
-            restored_state.recent_context = original_state["recent_context"]
-            restored_state.updated_at = original_state["updated_at"]
-            restored_state.source_last_event_id = original_state["source_last_event_id"]
-            restored_state.source_last_event_at = original_state["source_last_event_at"]
-            session.add(restored_state)
             session.commit()
 
 
-def test_pull_returns_fallback_when_no_candidate_matches_energy():
+def test_pull_returns_fallback_when_no_candidate_matches_energy(user_state_guard):
     client = TestClient(app)
     node_id = uuid4()
 
     with SessionLocal() as session:
         state = session.get(UserState, settings.default_user_id)
-        if state is None:
-            state = UserState(user_id=settings.default_user_id)
-            session.add(state)
-            session.commit()
-            session.refresh(state)
-
-        original_state = {
-            "mental_energy": state.mental_energy,
-            "physical_energy": state.physical_energy,
-            "focus_mode": state.focus_mode,
-            "state_version": state.state_version,
-            "recent_context": state.recent_context,
-            "updated_at": state.updated_at,
-            "source_last_event_id": state.source_last_event_id,
-            "source_last_event_at": state.source_last_event_at,
-        }
 
         state.mental_energy = 5
         state.physical_energy = 5
@@ -441,42 +347,16 @@ def test_pull_returns_fallback_when_no_candidate_matches_energy():
                     )
                 )
             session.execute(delete(ActionNode).where(ActionNode.node_id == node_id))
-            restored_state = session.get(UserState, settings.default_user_id)
-            restored_state.mental_energy = original_state["mental_energy"]
-            restored_state.physical_energy = original_state["physical_energy"]
-            restored_state.focus_mode = original_state["focus_mode"]
-            restored_state.state_version = original_state["state_version"]
-            restored_state.recent_context = original_state["recent_context"]
-            restored_state.updated_at = original_state["updated_at"]
-            restored_state.source_last_event_id = original_state["source_last_event_id"]
-            restored_state.source_last_event_at = original_state["source_last_event_at"]
-            session.add(restored_state)
             session.commit()
 
 
-def test_pull_penalizes_recent_same_type_completion():
+def test_pull_penalizes_recent_same_type_completion(user_state_guard):
     client = TestClient(app)
     node_ids: list = []
 
     with SessionLocal() as session:
         recommendation_id = None
         state = session.get(UserState, settings.default_user_id)
-        if state is None:
-            state = UserState(user_id=settings.default_user_id)
-            session.add(state)
-            session.commit()
-            session.refresh(state)
-
-        original_state = {
-            "mental_energy": state.mental_energy,
-            "physical_energy": state.physical_energy,
-            "focus_mode": state.focus_mode,
-            "state_version": state.state_version,
-            "recent_context": state.recent_context,
-            "updated_at": state.updated_at,
-            "source_last_event_id": state.source_last_event_id,
-            "source_last_event_at": state.source_last_event_at,
-        }
 
         state.mental_energy = 80
         state.physical_energy = 80
@@ -545,20 +425,10 @@ def test_pull_penalizes_recent_same_type_completion():
                     )
                 )
             session.execute(delete(ActionNode).where(ActionNode.node_id.in_(node_ids)))
-            restored_state = session.get(UserState, settings.default_user_id)
-            restored_state.mental_energy = original_state["mental_energy"]
-            restored_state.physical_energy = original_state["physical_energy"]
-            restored_state.focus_mode = original_state["focus_mode"]
-            restored_state.state_version = original_state["state_version"]
-            restored_state.recent_context = original_state["recent_context"]
-            restored_state.updated_at = original_state["updated_at"]
-            restored_state.source_last_event_id = original_state["source_last_event_id"]
-            restored_state.source_last_event_at = original_state["source_last_event_at"]
-            session.add(restored_state)
             session.commit()
 
 
-def test_pull_penalizes_exposure_fatigue():
+def test_pull_penalizes_exposure_fatigue(user_state_guard):
     client = TestClient(app)
     node_ids: list = []
     stale_recommendation_ids: list = []
@@ -566,22 +436,6 @@ def test_pull_penalizes_exposure_fatigue():
     with SessionLocal() as session:
         recommendation_id = None
         state = session.get(UserState, settings.default_user_id)
-        if state is None:
-            state = UserState(user_id=settings.default_user_id)
-            session.add(state)
-            session.commit()
-            session.refresh(state)
-
-        original_state = {
-            "mental_energy": state.mental_energy,
-            "physical_energy": state.physical_energy,
-            "focus_mode": state.focus_mode,
-            "state_version": state.state_version,
-            "recent_context": state.recent_context,
-            "updated_at": state.updated_at,
-            "source_last_event_id": state.source_last_event_id,
-            "source_last_event_at": state.source_last_event_at,
-        }
 
         state.mental_energy = 70
         state.physical_energy = 70
@@ -657,42 +511,16 @@ def test_pull_penalizes_exposure_fatigue():
                 )
             )
             session.execute(delete(ActionNode).where(ActionNode.node_id.in_(node_ids)))
-            restored_state = session.get(UserState, settings.default_user_id)
-            restored_state.mental_energy = original_state["mental_energy"]
-            restored_state.physical_energy = original_state["physical_energy"]
-            restored_state.focus_mode = original_state["focus_mode"]
-            restored_state.state_version = original_state["state_version"]
-            restored_state.recent_context = original_state["recent_context"]
-            restored_state.updated_at = original_state["updated_at"]
-            restored_state.source_last_event_id = original_state["source_last_event_id"]
-            restored_state.source_last_event_at = original_state["source_last_event_at"]
-            session.add(restored_state)
             session.commit()
 
 
-def test_pull_keeps_documented_energy_tolerance_buffer():
+def test_pull_keeps_documented_energy_tolerance_buffer(user_state_guard):
     client = TestClient(app)
     node_id = uuid4()
 
     with SessionLocal() as session:
         recommendation_id = None
         state = session.get(UserState, settings.default_user_id)
-        if state is None:
-            state = UserState(user_id=settings.default_user_id)
-            session.add(state)
-            session.commit()
-            session.refresh(state)
-
-        original_state = {
-            "mental_energy": state.mental_energy,
-            "physical_energy": state.physical_energy,
-            "focus_mode": state.focus_mode,
-            "state_version": state.state_version,
-            "recent_context": state.recent_context,
-            "updated_at": state.updated_at,
-            "source_last_event_id": state.source_last_event_id,
-            "source_last_event_at": state.source_last_event_at,
-        }
 
         state.mental_energy = 60
         state.physical_energy = 60
@@ -728,14 +556,4 @@ def test_pull_keeps_documented_energy_tolerance_buffer():
                     )
                 )
             session.execute(delete(ActionNode).where(ActionNode.node_id == node_id))
-            restored_state = session.get(UserState, settings.default_user_id)
-            restored_state.mental_energy = original_state["mental_energy"]
-            restored_state.physical_energy = original_state["physical_energy"]
-            restored_state.focus_mode = original_state["focus_mode"]
-            restored_state.state_version = original_state["state_version"]
-            restored_state.recent_context = original_state["recent_context"]
-            restored_state.updated_at = original_state["updated_at"]
-            restored_state.source_last_event_id = original_state["source_last_event_id"]
-            restored_state.source_last_event_at = original_state["source_last_event_at"]
-            session.add(restored_state)
             session.commit()
