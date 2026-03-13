@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -46,30 +47,53 @@ def get_current_state(db: Session) -> UserStateSnapshot:
     return _snapshot_from_model(state)
 
 
-def reset_state(db: Session, mental_energy: int, physical_energy: int, reason: str) -> UserStateSnapshot:
+def reset_state(
+    db: Session,
+    mental_energy: int,
+    physical_energy: int,
+    reason: str,
+    *,
+    max_retries: int = 3,
+) -> UserStateSnapshot:
     """Reset the persisted user state and write a history row."""
 
     state = _ensure_user_state(db)
-    before_snapshot = _snapshot_from_model(state).model_dump(mode="json")
 
-    state.mental_energy = mental_energy
-    state.physical_energy = physical_energy
-    state.focus_mode = "recovered"
-    state.recent_context = "manual reset"
-    state.updated_at = datetime.now(timezone.utc)
-    state.state_version += 1
+    for _ in range(max_retries):
+        state = db.get(UserState, state.user_id)
+        expected_version = state.state_version
+        before_snapshot = _snapshot_from_model(state).model_dump(mode="json")
+        now = datetime.now(timezone.utc)
 
-    db.add(
-        StateHistory(
-            user_id=state.user_id,
-            event_id=None,
-            before_state=before_snapshot,
-            after_state=_snapshot_from_model(state).model_dump(mode="json"),
-            change_reason=reason,
+        result = db.execute(
+            update(UserState)
+            .where(
+                UserState.user_id == state.user_id,
+                UserState.state_version == expected_version,
+            )
+            .values(
+                state_version=expected_version + 1,
+                mental_energy=mental_energy,
+                physical_energy=physical_energy,
+                focus_mode="recovered",
+                recent_context="manual reset",
+                updated_at=now,
+            )
         )
-    )
-    db.add(state)
-    db.commit()
-    db.refresh(state)
+        if result.rowcount == 1:
+            updated_state = db.scalar(select(UserState).where(UserState.user_id == state.user_id))
+            db.add(
+                StateHistory(
+                    user_id=updated_state.user_id,
+                    event_id=None,
+                    before_state=before_snapshot,
+                    after_state=_snapshot_from_model(updated_state).model_dump(mode="json"),
+                    change_reason=reason,
+                )
+            )
+            db.commit()
+            return _snapshot_from_model(updated_state)
 
-    return _snapshot_from_model(state)
+        db.rollback()
+
+    raise RuntimeError(f"failed to reset state for user {state.user_id} after {max_retries} retries")

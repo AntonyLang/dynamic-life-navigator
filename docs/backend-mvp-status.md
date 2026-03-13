@@ -24,6 +24,7 @@ That means the core loop is present and test-covered:
 - request ID propagation
 - structured logging helpers
 - local PostgreSQL / Redis / Celery bootstrap
+- Redis-backed webhook duplicate suppression with DB uniqueness as the final correctness layer
 - Alembic migration path
 
 ### Core data model
@@ -51,6 +52,7 @@ That means the core loop is present and test-covered:
 ### Recommendation loop
 - candidate filtering
 - deterministic ranking
+- documented `+10` energy tolerance buffer for recommendation matching
 - cooldown / suppression
 - rejection penalty
 - recent completion penalty
@@ -84,35 +86,30 @@ These are real product capabilities, but they are not required to call the curre
 
 These are the next likely engineering moves after MVP:
 
-### 1. Webhook duplicate suppression is only half complete
-- Database uniqueness is implemented.
-- Redis short-term duplicate suppression from the engineering addendum is not implemented yet.
-- Impact: correctness is preserved, but webhook hot-loop efficiency is not fully aligned with the PM guidance.
-
-### 2. Structured output path is still deterministic-only
+### 1. Structured output path is still deterministic-only
 - Current parser and profiling paths are conservative deterministic heuristics.
 - The PM allows this ordering for MVP, but future LLM integration should be schema-first with validation and retry/fallback.
 
-### 3. Push path only records decisions
+### 2. Push path only records decisions
 - `mode='push'` recommendation records are created.
 - External delivery and delivery-result handling are still absent.
 
-### 4. Replay / rebuild exists in principle, not as a finished tool
+### 3. Replay / rebuild exists in principle, not as a finished tool
 - Fact and snapshot layers are separated correctly.
 - There is no operator-facing replay command or rebuild script yet.
 
 ## Recommended next phase after MVP
 
 1. Frontend integration against the stable API surface
-2. Redis-backed webhook duplicate suppression
-3. schema-first LLM structured output for parsing/profile/rendering
-4. real push delivery channel and delivery audit outcomes
+2. schema-first LLM structured output for parsing/profile/rendering
+3. real push delivery channel and delivery audit outcomes
+4. replay / rebuild tooling over `event_logs`
 
 ## Verification baseline
 
 Latest local verification status:
 
 - full test suite passes through the local junction path
-- current count: `34 passed`
+- current count: `43 passed`
 - application uses real PostgreSQL locally
 - initial migration has been applied to the local `dln` database

@@ -6,6 +6,7 @@ import json
 import logging
 from datetime import datetime, timezone
 from hashlib import sha256
+from typing import Any
 from uuid import uuid4
 
 from fastapi import HTTPException, status
@@ -14,6 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.core.idempotency import claim_webhook_idempotency
 from app.core.logging import log_event
 from app.models.event_log import EventLog
 from app.schemas.chat import ChatMessageRequest, ChatMessageResponse
@@ -106,10 +108,85 @@ def ingest_chat_message(db: Session, request_id: str, payload: ChatMessageReques
     )
 
 
-def ingest_webhook_event(request_id: str) -> WebhookIngestResponse:
-    """Return a placeholder webhook ack response."""
+def _find_existing_webhook_event_id(
+    db: Session,
+    *,
+    source: str,
+    external_event_id: str | None,
+    payload_hash: str,
+):
+    if external_event_id is not None:
+        return db.scalar(
+            select(EventLog.event_id)
+            .where(
+                EventLog.source == source,
+                EventLog.external_event_id == external_event_id,
+            )
+            .order_by(EventLog.created_at.desc())
+            .limit(1)
+        )
 
-    raise RuntimeError("ingest_webhook_event requires a database session")
+    return db.scalar(
+        select(EventLog.event_id)
+        .where(
+            EventLog.source == source,
+            EventLog.payload_hash == payload_hash,
+        )
+        .order_by(EventLog.created_at.desc())
+        .limit(1)
+    )
+
+
+def _build_webhook_idempotency_key(
+    *,
+    user_id: str,
+    source: str,
+    external_event_id: str | None,
+    payload_hash: str,
+) -> str:
+    identifier = external_event_id or payload_hash
+    return f"idempotency:{user_id}:{source}:{identifier}"
+
+
+def _parse_top_level_datetime(raw_value: Any) -> datetime | None:
+    if raw_value is None:
+        return None
+
+    if isinstance(raw_value, datetime):
+        return raw_value if raw_value.tzinfo is not None else raw_value.replace(tzinfo=timezone.utc)
+
+    if isinstance(raw_value, (int, float)):
+        timestamp = float(raw_value)
+    elif isinstance(raw_value, str):
+        trimmed = raw_value.strip()
+        if not trimmed:
+            return None
+        if trimmed.isdigit():
+            timestamp = float(trimmed)
+        else:
+            normalized = trimmed.replace("Z", "+00:00")
+            try:
+                parsed = datetime.fromisoformat(normalized)
+            except ValueError:
+                return None
+            return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=timezone.utc)
+    else:
+        return None
+
+    if timestamp > 1_000_000_000_000:
+        timestamp /= 1000.0
+    try:
+        return datetime.fromtimestamp(timestamp, tz=timezone.utc)
+    except (OverflowError, OSError, ValueError):
+        return None
+
+
+def _derive_webhook_occurred_at(payload: dict[str, Any], now: datetime) -> datetime:
+    for field_name in ("occurred_at", "event_time", "timestamp", "created_at", "start_time", "updated_at"):
+        parsed = _parse_top_level_datetime(payload.get(field_name))
+        if parsed is not None:
+            return parsed
+    return now
 
 
 def ingest_webhook_event_with_db(
@@ -121,21 +198,57 @@ def ingest_webhook_event_with_db(
     """Persist a raw webhook payload and return an idempotent ack."""
 
     event_id = uuid4()
+    now = datetime.now(timezone.utc)
     external_event_id = payload.get("external_event_id") or payload.get("event_id") or payload.get("id")
     payload_hash = sha256(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
+    external_event_id_str = str(external_event_id) if external_event_id is not None else None
+    idempotency_key = _build_webhook_idempotency_key(
+        user_id=settings.default_user_id,
+        source=source,
+        external_event_id=external_event_id_str,
+        payload_hash=payload_hash,
+    )
+    should_continue_to_db = claim_webhook_idempotency(
+        idempotency_key,
+        settings.webhook_idempotency_ttl_seconds,
+    )
+
+    if not should_continue_to_db:
+        existing_event_id = _find_existing_webhook_event_id(
+            db,
+            source=source,
+            external_event_id=external_event_id_str,
+            payload_hash=payload_hash,
+        )
+        if existing_event_id is not None:
+            log_event(
+                logger,
+                logging.INFO,
+                "webhook duplicate suppressed by redis idempotency",
+                event_id=existing_event_id,
+                user_id=settings.default_user_id,
+                source=source,
+                duplicate=True,
+            )
+            return WebhookIngestResponse(
+                request_id=request_id,
+                accepted=True,
+                duplicate=True,
+                event_id=existing_event_id,
+            )
 
     event_log = EventLog(
         event_id=event_id,
         user_id=settings.default_user_id,
         source=source,
         source_event_type=payload.get("type") if isinstance(payload.get("type"), str) else None,
-        external_event_id=str(external_event_id) if external_event_id is not None else None,
+        external_event_id=external_event_id_str,
         payload_hash=payload_hash,
         raw_payload=payload,
         parse_status="pending",
         processed_status="new",
-        occurred_at=datetime.now(timezone.utc),
-        ingested_at=datetime.now(timezone.utc),
+        occurred_at=_derive_webhook_occurred_at(payload, now),
+        ingested_at=now,
         source_sequence=str(payload.get("sequence")) if payload.get("sequence") is not None else None,
     )
 
@@ -156,27 +269,12 @@ def ingest_webhook_event_with_db(
     except IntegrityError:
         db.rollback()
         duplicate = True
-
-        if external_event_id is not None:
-            existing_event_id = db.scalar(
-                select(EventLog.event_id)
-                .where(
-                    EventLog.source == source,
-                    EventLog.external_event_id == str(external_event_id),
-                )
-                .order_by(EventLog.created_at.desc())
-                .limit(1)
-            )
-        else:
-            existing_event_id = db.scalar(
-                select(EventLog.event_id)
-                .where(
-                    EventLog.source == source,
-                    EventLog.payload_hash == payload_hash,
-                )
-                .order_by(EventLog.created_at.desc())
-                .limit(1)
-            )
+        existing_event_id = _find_existing_webhook_event_id(
+            db,
+            source=source,
+            external_event_id=external_event_id_str,
+            payload_hash=payload_hash,
+        )
 
         if existing_event_id is not None:
             event_id = existing_event_id

@@ -7,9 +7,9 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.orm import Session
 
+from app.core.request_context import get_request_id_from_request
 from app.db.session import get_db_session
 from app.schemas.state import StateResetRequest, StateResetResponse, StateResponse
-from app.services.request_context import get_request_id_from_request
 from app.services.state_service import get_current_state, reset_state
 
 router = APIRouter(prefix="/state", tags=["state"])

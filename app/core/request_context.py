@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from contextvars import ContextVar
 
+from fastapi import Request
+
 _request_id_context: ContextVar[str | None] = ContextVar("request_id", default=None)
 
 
@@ -23,3 +25,9 @@ def get_request_id() -> str | None:
     """Return the current request ID if one is set."""
 
     return _request_id_context.get()
+
+
+def get_request_id_from_request(request: Request) -> str:
+    """Extract the request ID assigned by middleware."""
+
+    return getattr(request.state, "request_id", "unknown-request")

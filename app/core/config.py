@@ -42,6 +42,10 @@ class AppSettings(BaseSettings):
         default="redis://localhost:6379/0",
         description="Redis URL for cache/idempotency and as Celery broker",
     )
+    webhook_idempotency_ttl_seconds: int = Field(
+        default=86400,
+        description="TTL in seconds for Redis-backed webhook duplicate suppression",
+    )
     celery_broker_url: str | None = Field(
         default=None,
         description="Celery broker URL; defaults to redis_url if not set",

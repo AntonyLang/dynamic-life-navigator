@@ -5,10 +5,10 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.orm import Session
 
+from app.core.request_context import get_request_id_from_request
 from app.db.session import get_db_session
 from app.schemas.chat import ChatMessageRequest, ChatMessageResponse
 from app.services.event_ingestion import ingest_chat_message
-from app.services.request_context import get_request_id_from_request
 
 router = APIRouter(prefix="/events", tags=["events"])
 

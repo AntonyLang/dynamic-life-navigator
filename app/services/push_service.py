@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.logging import log_event
 from app.models.recommendation_record import RecommendationRecord
-from app.services.recommendation_service import CandidateScore, _build_message, get_ranked_candidates
+from app.ranking import CandidateScore, build_recommendation_message, get_ranked_candidates
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
@@ -144,7 +144,7 @@ def evaluate_push_opportunities(db: Session, trigger_event_id: UUID | str | None
                 {
                     "node_id": str(selected_candidate.node.node_id),
                     "title": selected_candidate.node.title,
-                    "message": _build_message(selected_candidate.node, selected_candidate.reason_tags),
+                    "message": build_recommendation_message(selected_candidate.node, selected_candidate.reason_tags),
                     "reason_tags": selected_candidate.reason_tags,
                 }
             ],

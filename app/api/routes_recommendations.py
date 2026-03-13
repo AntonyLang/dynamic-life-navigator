@@ -7,6 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.orm import Session
 
+from app.core.request_context import get_request_id_from_request
 from app.db.session import get_db_session
 from app.schemas.recommendations import (
     RecommendationBriefResponse,
@@ -17,7 +18,6 @@ from app.schemas.recommendations import (
 from app.services.brief_service import get_brief
 from app.services.feedback_service import submit_feedback
 from app.services.recommendation_service import get_pull_recommendations
-from app.services.request_context import get_request_id_from_request
 
 router = APIRouter(prefix="/recommendations", tags=["recommendations"])
 

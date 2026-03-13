@@ -1,6 +1,15 @@
-"""
-Recommendation filtering and ranking package.
+"""Recommendation filtering and ranking helpers."""
 
-Phase 0: placeholder; implementation will be added in later phases.
-"""
+from app.ranking.candidate_ranker import (
+    CandidateScore,
+    ENERGY_MATCH_TOLERANCE,
+    build_recommendation_message,
+    get_ranked_candidates,
+)
 
+__all__ = [
+    "CandidateScore",
+    "ENERGY_MATCH_TOLERANCE",
+    "build_recommendation_message",
+    "get_ranked_candidates",
+]

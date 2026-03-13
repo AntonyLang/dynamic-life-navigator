@@ -14,6 +14,7 @@ from app.models.node_annotation import NodeAnnotation
 from app.models.recommendation_feedback import RecommendationFeedback
 from app.models.recommendation_record import RecommendationRecord
 from app.models.user_state import UserState
+from app.ranking import ENERGY_MATCH_TOLERANCE
 
 settings = get_settings()
 
@@ -656,6 +657,77 @@ def test_pull_penalizes_exposure_fatigue():
                 )
             )
             session.execute(delete(ActionNode).where(ActionNode.node_id.in_(node_ids)))
+            restored_state = session.get(UserState, settings.default_user_id)
+            restored_state.mental_energy = original_state["mental_energy"]
+            restored_state.physical_energy = original_state["physical_energy"]
+            restored_state.focus_mode = original_state["focus_mode"]
+            restored_state.state_version = original_state["state_version"]
+            restored_state.recent_context = original_state["recent_context"]
+            restored_state.updated_at = original_state["updated_at"]
+            restored_state.source_last_event_id = original_state["source_last_event_id"]
+            restored_state.source_last_event_at = original_state["source_last_event_at"]
+            session.add(restored_state)
+            session.commit()
+
+
+def test_pull_keeps_documented_energy_tolerance_buffer():
+    client = TestClient(app)
+    node_id = uuid4()
+
+    with SessionLocal() as session:
+        recommendation_id = None
+        state = session.get(UserState, settings.default_user_id)
+        if state is None:
+            state = UserState(user_id=settings.default_user_id)
+            session.add(state)
+            session.commit()
+            session.refresh(state)
+
+        original_state = {
+            "mental_energy": state.mental_energy,
+            "physical_energy": state.physical_energy,
+            "focus_mode": state.focus_mode,
+            "state_version": state.state_version,
+            "recent_context": state.recent_context,
+            "updated_at": state.updated_at,
+            "source_last_event_id": state.source_last_event_id,
+            "source_last_event_at": state.source_last_event_at,
+        }
+
+        state.mental_energy = 60
+        state.physical_energy = 60
+        session.add(state)
+        session.add(
+            ActionNode(
+                node_id=node_id,
+                user_id=settings.default_user_id,
+                drive_type="project",
+                status="active",
+                title="Edge-of-tolerance task",
+                priority_score=80,
+                dynamic_urgency_score=40,
+                mental_energy_required=60 + ENERGY_MATCH_TOLERANCE,
+                physical_energy_required=60 + ENERGY_MATCH_TOLERANCE,
+            )
+        )
+        session.commit()
+
+        try:
+            response = client.get("/api/v1/recommendations/pull?limit=1")
+            assert response.status_code == 200
+            body = response.json()
+            recommendation_id = UUID(body["recommendation_id"])
+
+            assert body["empty_state"] is False
+            assert body["items"][0]["title"] == "Edge-of-tolerance task"
+        finally:
+            if recommendation_id is not None:
+                session.execute(
+                    delete(RecommendationRecord).where(
+                        RecommendationRecord.recommendation_id == recommendation_id
+                    )
+                )
+            session.execute(delete(ActionNode).where(ActionNode.node_id == node_id))
             restored_state = session.get(UserState, settings.default_user_id)
             restored_state.mental_energy = original_state["mental_energy"]
             restored_state.physical_energy = original_state["physical_energy"]

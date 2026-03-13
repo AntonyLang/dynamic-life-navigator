@@ -7,10 +7,10 @@ from typing import Any
 from fastapi import APIRouter, Body, Depends, Request, status
 from sqlalchemy.orm import Session
 
+from app.core.request_context import get_request_id_from_request
 from app.db.session import get_db_session
 from app.schemas.webhooks import WebhookIngestResponse, WebhookSource
 from app.services.event_ingestion import ingest_webhook_event_with_db
-from app.services.request_context import get_request_id_from_request
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 

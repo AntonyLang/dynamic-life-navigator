@@ -5,10 +5,10 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.orm import Session
 
+from app.core.request_context import get_request_id_from_request
 from app.db.session import get_db_session
 from app.schemas.recommendations import RecommendationBriefResponse
 from app.services.brief_service import get_brief
-from app.services.request_context import get_request_id_from_request
 
 router = APIRouter(tags=["brief"])
 
