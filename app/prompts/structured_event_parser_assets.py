@@ -5,10 +5,12 @@ from __future__ import annotations
 import json
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from app.models.event_log import EventLog
 from app.schemas.parsing import ParserDecisionDTO
+
+if TYPE_CHECKING:
+    from app.models.event_log import EventLog
 
 
 PROMPT_DIR = Path(__file__).resolve().parent

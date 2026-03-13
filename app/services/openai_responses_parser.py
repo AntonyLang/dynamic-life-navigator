@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 from pydantic import ValidationError
 
-from app.models.event_log import EventLog
 from app.prompts.structured_event_parser_assets import (
     build_structured_event_parser_request,
 )
@@ -17,6 +16,9 @@ from app.services.parser_provider import (
     DeterministicEventParserProvider,
     EventParserProvider,
 )
+
+if TYPE_CHECKING:
+    from app.models.event_log import EventLog
 
 OPENAI_RESPONSES_PARSER_VERSION = "openai_responses_v0"
 

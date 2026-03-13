@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 from pydantic import ValidationError
 
 from app.core.config import get_settings
-from app.models.event_log import EventLog
 from app.prompts.structured_event_parser_assets import (
     build_structured_event_parser_model_response_schema,
     build_structured_event_parser_request,
@@ -19,6 +18,9 @@ from app.services.parser_provider import (
     DeterministicEventParserProvider,
     EventParserProvider,
 )
+
+if TYPE_CHECKING:
+    from app.models.event_log import EventLog
 
 GEMINI_DIRECT_PARSER_VERSION = "gemini_direct_v0"
 
@@ -64,14 +66,17 @@ class GeminiDirectEventParserProvider:
             },
         }
 
+    def build_request_body(self, request_payload: dict[str, object]) -> bytes:
+        return json.dumps(request_payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+
     def _post_generate_content_request(self, request_payload: dict[str, object]) -> dict[str, Any]:
         response = httpx.post(
             f"{self._base_url}/models/{self._model_name}:generateContent",
             headers={
                 "x-goog-api-key": str(self._api_key),
-                "Content-Type": "application/json",
+                "Content-Type": "application/json; charset=utf-8",
             },
-            json=request_payload,
+            content=self.build_request_body(request_payload),
             timeout=self._timeout_seconds,
         )
         response.raise_for_status()
@@ -177,6 +182,9 @@ class GeminiDirectEventParserProvider:
             except httpx.HTTPError as exc:
                 last_error_reason = "request_error"
                 last_error_detail = self._extract_http_error_detail(exc)
+            except UnicodeError as exc:
+                last_error_reason = "encoding_error"
+                last_error_detail = str(exc)[:300]
             except ValueError as exc:
                 last_error_reason = str(exc)
                 last_error_detail = None

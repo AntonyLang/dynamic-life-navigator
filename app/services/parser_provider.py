@@ -2,17 +2,19 @@
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from pydantic import ValidationError
 
 from app.core.config import get_settings
-from app.models.event_log import EventLog
 from app.prompts.structured_event_parser_assets import (
     build_structured_event_parser_request,
 )
 from app.schemas.parsing import ParserDecisionDTO
 from app.services.signal_catalog import find_first_parser_signal
+
+if TYPE_CHECKING:
+    from app.models.event_log import EventLog
 
 
 DETERMINISTIC_PARSER_VERSION = "deterministic_signal_catalog_v1"
