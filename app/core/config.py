@@ -101,6 +101,30 @@ class AppSettings(BaseSettings):
         le=300.0,
         description="Timeout budget in seconds for a future model-backed structured profile call",
     )
+    push_delivery_enabled: bool = Field(
+        default=True,
+        description="Enable outbound push delivery after a push recommendation is generated",
+    )
+    push_delivery_channel: Literal["webhook_sink"] = Field(
+        default="webhook_sink",
+        description="Outbound push delivery channel; v1 only supports a single webhook sink",
+    )
+    push_webhook_url: str | None = Field(
+        default=None,
+        description="Webhook sink URL for real outbound push delivery",
+    )
+    push_webhook_timeout_seconds: float = Field(
+        default=10.0,
+        gt=0.0,
+        le=120.0,
+        description="Timeout budget in seconds for outbound push webhook delivery",
+    )
+    push_delivery_max_attempts: int = Field(
+        default=3,
+        ge=1,
+        le=10,
+        description="Maximum outbound push delivery attempts before marking a push as failed",
+    )
 
     database_url: str = Field(
         default="postgresql+psycopg://postgres:postgres@localhost:5432/dln",

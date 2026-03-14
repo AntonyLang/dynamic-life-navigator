@@ -9,6 +9,7 @@ from sqlalchemy import delete, select
 from app.core.config import get_settings
 from app.db.session import SessionLocal
 from app.models.event_log import EventLog
+from app.models.push_delivery_attempt import PushDeliveryAttempt
 from app.models.recommendation_feedback import RecommendationFeedback
 from app.models.recommendation_record import RecommendationRecord
 from app.models.state_history import StateHistory
@@ -67,6 +68,7 @@ class CleanupDbArtifacts:
             return
 
         with SessionLocal() as session:
+            session.execute(delete(PushDeliveryAttempt).where(PushDeliveryAttempt.recommendation_id.in_(ids)))
             session.execute(delete(RecommendationFeedback).where(RecommendationFeedback.recommendation_id.in_(ids)))
             session.execute(delete(RecommendationRecord).where(RecommendationRecord.recommendation_id.in_(ids)))
             session.commit()
@@ -82,6 +84,7 @@ class CleanupDbArtifacts:
                 select(RecommendationRecord.recommendation_id).where(RecommendationRecord.trigger_event_id.in_(ids))
             ).all()
             if recommendation_ids:
+                session.execute(delete(PushDeliveryAttempt).where(PushDeliveryAttempt.recommendation_id.in_(recommendation_ids)))
                 session.execute(
                     delete(RecommendationFeedback).where(RecommendationFeedback.recommendation_id.in_(recommendation_ids))
                 )

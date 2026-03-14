@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from uuid import uuid4
 
 from sqlalchemy import delete, select
@@ -13,6 +14,8 @@ from app.models.node_annotation import NodeAnnotation
 from app.models.recommendation_record import RecommendationRecord
 from app.models.user_state import UserState
 from app.services.push_service import evaluate_push_opportunities
+from app.workers import local_pipeline
+from app.workers import tasks_push_delivery
 from app.workers import tasks_push_eval
 from app.workers import tasks_state
 
@@ -197,3 +200,82 @@ def test_apply_state_patch_task_enqueues_push_evaluation(monkeypatch):
     assert result["status"] == "applied"
     assert captured["push_event_id"] == "evt-worker-1"
     assert captured["compare_event_id"] == "evt-worker-1"
+
+
+def test_push_evaluation_task_enqueues_delivery_for_generated_push(monkeypatch):
+    captured: dict[str, str | None] = {"recommendation_id": None}
+
+    class DummySession:
+        def __enter__(self):
+            return object()
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr(tasks_push_eval, "SessionLocal", lambda: DummySession())
+    monkeypatch.setattr(
+        tasks_push_eval,
+        "evaluate_push_opportunities_service",
+        lambda session, trigger_event_id: {
+            "status": "generated",
+            "recommendation_id": "rec-push-1",
+            "trigger_event_id": trigger_event_id,
+            "reason": None,
+        },
+    )
+    monkeypatch.setattr(tasks_push_eval.celery_app.conf, "task_always_eager", False, raising=False)
+    monkeypatch.setattr(
+        tasks_push_delivery.deliver_push_recommendation,
+        "delay",
+        lambda recommendation_id: captured.__setitem__("recommendation_id", recommendation_id),
+    )
+
+    result = tasks_push_eval.evaluate_push_opportunities("evt-push-1")
+
+    assert result["status"] == "generated"
+    assert result["delivery_status"] == "queued"
+    assert captured["recommendation_id"] == "rec-push-1"
+
+
+def test_local_pipeline_runs_push_delivery_after_generated_result(monkeypatch):
+    captured: dict[str, object] = {"recommendation_id": None, "delivery_status": None}
+
+    class DummySession:
+        def __enter__(self):
+            return object()
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class DummySnapshot:
+        focus_mode = "tired"
+        mental_energy = 65
+        physical_energy = 80
+
+    monkeypatch.setattr(local_pipeline, "SessionLocal", lambda: DummySession())
+    monkeypatch.setattr(local_pipeline, "parse_event_log", lambda session, event_id: {"event_type": "chat_update"})
+    monkeypatch.setattr(local_pipeline, "apply_state_patch_from_event", lambda session, event_id: DummySnapshot())
+    monkeypatch.setattr(
+        local_pipeline,
+        "evaluate_push_opportunities",
+        lambda session, event_id: {
+            "status": "generated",
+            "recommendation_id": "rec-local-1",
+            "trigger_event_id": event_id,
+            "reason": None,
+        },
+    )
+    monkeypatch.setattr(
+        local_pipeline,
+        "deliver_push_recommendation",
+        lambda session, recommendation_id: (
+            captured.__setitem__("recommendation_id", recommendation_id)
+            or {"status": "sent", "recommendation_id": recommendation_id}
+        ),
+    )
+    monkeypatch.setattr(local_pipeline, "compare_shadow_parser_decision", lambda session, event_id: {"status": "skipped"})
+    monkeypatch.setattr(local_pipeline, "get_settings", lambda: SimpleNamespace(parser_shadow_enabled=False))
+
+    local_pipeline.run_local_event_pipeline("evt-local-1")
+
+    assert captured["recommendation_id"] == "rec-local-1"

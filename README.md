@@ -13,11 +13,11 @@ This repository currently provides:
 - PM-aligned API aliases for `/api/v1/events/ingest`, `/api/v1/state`, `/api/v1/recommendations/next`, `/api/v1/recommendations/{id}/feedback`, and `/api/v1/brief`
 - Celery bootstrap
 - local Docker Compose for PostgreSQL and Redis
-- database-backed state updates, pull recommendations, feedback learning, and weak push decision records
+- database-backed state updates, pull recommendations, feedback learning, and weak push delivery with attempt audit
 
 `ENABLE_WORKER_DISPATCH` defaults to `false` so request handlers stay fast even when Redis/workers are not running locally.
 `DEFAULT_USER_ID` is the single-user MVP identity used by the current DB-backed services.
-The current push path only decides whether a push recommendation should be generated and stores the result in `recommendation_records`; it does not send external notifications yet.
+The current push path supports a single outbound webhook sink. Delivery outcomes are summarized on `recommendation_records.delivery_status` and audited per attempt in `push_delivery_attempts`.
 
 ## Local setup
 
@@ -61,6 +61,36 @@ Step 22 integration verification was completed in both local async modes:
 - `ENABLE_WORKER_DISPATCH=false`: FastAPI background pipeline advances `event_logs -> state -> weak push` after the ack
 - `ENABLE_WORKER_DISPATCH=true`: Redis + Celery worker path advances the same loop and preserves the same frontend reconcile model
 
+## Run a local push webhook sink
+
+For real push delivery smoke tests, start the bundled webhook sink in a separate shell:
+
+```powershell
+python scripts/run_push_webhook_sink.py --host 127.0.0.1 --port 8787
+```
+
+Then configure push delivery in `.env` or your shell:
+
+```text
+PUSH_DELIVERY_ENABLED=true
+PUSH_DELIVERY_CHANNEL=webhook_sink
+PUSH_WEBHOOK_URL=http://127.0.0.1:8787/push
+PUSH_WEBHOOK_TIMEOUT_SECONDS=10
+PUSH_DELIVERY_MAX_ATTEMPTS=3
+```
+
+To simulate failures, restart the sink with a non-2xx status:
+
+```powershell
+python scripts/run_push_webhook_sink.py --host 127.0.0.1 --port 8787 --status-code 500
+```
+
+To inspect recent delivery attempts from the DB:
+
+```powershell
+python scripts/show_push_delivery_attempts.py --limit 10
+```
+
 For Windows local development, the verified worker-on combination is:
 - API on `http://127.0.0.1:8000`
 - Redis running through `docker compose up -d redis`
@@ -94,6 +124,57 @@ First-pass frontend/backend integration artifacts live in:
 - `docs/frontend-backend-integration-checklist.md`
 - `docs/frontend-backend-integration-issues.md`
 
+## Run the uTools plugin shell
+
+The repository now also includes an independent uTools plugin project under `utools-plugin/`.
+It reuses the existing backend contracts through a preload bridge, so the renderer does not call the backend directly and does not require backend CORS changes.
+
+1. Keep the API running on `http://127.0.0.1:8000`.
+2. Install plugin dependencies:
+
+```powershell
+cd C:\Users\Antony\dev\individual-assistant\utools-plugin
+npm.cmd install
+```
+
+3. Start the plugin renderer dev server:
+
+```powershell
+cd C:\Users\Antony\dev\individual-assistant\utools-plugin
+npm.cmd run dev
+```
+
+4. In the uTools developer tools, import the `utools-plugin` folder.
+5. uTools will load:
+   - `plugin.json`
+   - `preload.js`
+   - `development.main = http://127.0.0.1:5174/index.html`
+
+The plugin exposes three feature codes:
+- `shell`
+- `pull`
+- `brief`
+
+Current plugin behavior:
+- normal text goes to `POST /api/v1/chat/messages` with `channel=desktop_plugin`
+- `/pull` calls `GET /api/v1/recommendations/next`
+- `/brief` calls `GET /api/v1/brief`
+- recommendation feedback uses the existing `POST /api/v1/recommendations/{id}/feedback`
+- image launch payloads are acknowledged locally as "已收到图片，暂未解析。"
+
+For an offline/importable build:
+
+```powershell
+cd C:\Users\Antony\dev\individual-assistant\utools-plugin
+npm.cmd run build
+```
+
+Keep these files together when importing the built plugin folder into uTools:
+- `plugin.json`
+- `preload.js`
+- `logo.svg`
+- `dist/`
+
 ## Quick E2E Check
 
 With the API running locally, you can exercise the current MVP backend in this order:
@@ -122,6 +203,33 @@ Invoke-RestMethod -Method Get -Uri http://127.0.0.1:8000/api/v1/recommendations/
 Invoke-RestMethod -Method Get -Uri http://127.0.0.1:8000/api/v1/brief
 ```
 
+## Quick push delivery smoke
+
+1. Start the local webhook sink:
+
+```powershell
+python scripts/run_push_webhook_sink.py --host 127.0.0.1 --port 8787
+```
+
+2. Configure `PUSH_WEBHOOK_URL=http://127.0.0.1:8787/push`.
+3. Start the API in either:
+   - `ENABLE_WORKER_DISPATCH=false`
+   - `ENABLE_WORKER_DISPATCH=true` with Redis + Celery
+4. Trigger an event or state change that generates a push recommendation.
+5. Verify:
+   - the sink prints one webhook payload
+   - `recommendation_records.mode='push'`
+   - `recommendation_records.delivery_status='sent'`
+   - `scripts/show_push_delivery_attempts.py` shows a `sent` attempt
+
+For a failure smoke:
+
+1. Restart the sink with `--status-code 500`
+2. Trigger another push recommendation
+3. Verify:
+   - delivery ends as `failed`
+   - three attempt rows are recorded
+
 ## Verify
 
 ```bash
@@ -132,6 +240,14 @@ Frontend verification:
 
 ```powershell
 cd frontend
+npm.cmd run test
+npm.cmd run build
+```
+
+uTools plugin verification:
+
+```powershell
+cd C:\Users\Antony\dev\individual-assistant\utools-plugin
 npm.cmd run test
 npm.cmd run build
 ```
@@ -152,4 +268,11 @@ if (-not (Test-Path C:\Users\Antony\dev\individual-assistant)) {
     New-Item -ItemType Junction -Path C:\Users\Antony\dev\individual-assistant -Target E:\Antony\Documents\individual-assistant | Out-Null
 }
 & 'C:\Users\Antony\AppData\Local\Programs\Python\Python312\python.exe' -m pytest C:\Users\Antony\dev\individual-assistant\tests -q
+```
+
+The same Windows path workaround applies to the uTools plugin Node commands on this machine.
+Prefer running `npm.cmd run test` and `npm.cmd run build` from:
+
+```powershell
+C:\Users\Antony\dev\individual-assistant\utools-plugin
 ```

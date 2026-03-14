@@ -30,6 +30,7 @@ def create_celery_app() -> Celery:
             "app.workers.tasks_state",
             "app.workers.tasks_enrich",
             "app.workers.tasks_compress",
+            "app.workers.tasks_push_delivery",
             "app.workers.tasks_push_eval",
         ],
     )
@@ -45,6 +46,7 @@ from app.workers import tasks_compress as _tasks_compress  # noqa: E402,F401
 from app.workers import tasks_enrich as _tasks_enrich  # noqa: E402,F401
 from app.workers import tasks_parse as _tasks_parse  # noqa: E402,F401
 from app.workers import tasks_profile as _tasks_profile  # noqa: E402,F401
+from app.workers import tasks_push_delivery as _tasks_push_delivery  # noqa: E402,F401
 from app.workers import tasks_push_eval as _tasks_push_eval  # noqa: E402,F401
 from app.workers import tasks_scores as _tasks_scores  # noqa: E402,F401
 from app.workers import tasks_state as _tasks_state  # noqa: E402,F401

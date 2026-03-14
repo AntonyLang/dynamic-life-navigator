@@ -11,3 +11,9 @@ frontend/coverage/
 frontend/*.tsbuildinfo
 frontend/vite.config.js
 frontend/vite.config.d.ts
+utools-plugin/node_modules/
+utools-plugin/dist/
+utools-plugin/coverage/
+utools-plugin/*.tsbuildinfo
+utools-plugin/vite.config.js
+utools-plugin/vite.config.d.ts

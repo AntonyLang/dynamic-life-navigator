@@ -10,6 +10,7 @@ def test_metadata_contains_core_tables():
         "event_logs",
         "recommendation_records",
         "recommendation_feedback",
+        "push_delivery_attempts",
     }
 
     assert expected_tables.issubset(Base.metadata.tables.keys())

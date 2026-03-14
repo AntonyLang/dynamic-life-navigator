@@ -47,6 +47,7 @@ Parser quality has also moved beyond the original English-only MVP heuristic:
 - `event_logs`
 - `recommendation_records`
 - `recommendation_feedback`
+- `push_delivery_attempts`
 
 ### API surface
 - `POST /api/v1/chat/messages`
@@ -77,6 +78,7 @@ Parser quality has also moved beyond the original English-only MVP heuristic:
 - parse event logs
 - apply state patches with optimistic concurrency
 - evaluate weak push opportunities
+- deliver weak push recommendations through a single webhook sink
 - enrich active nodes
 - compress old event logs
 - recalculate dynamic urgency scores
@@ -86,7 +88,6 @@ Parser quality has also moved beyond the original English-only MVP heuristic:
 
 These are real product capabilities, but they are not required to call the current backend MVP-ready:
 
-- real external push delivery
 - LLM-backed structured parser / renderer
 - remote enrichment sources
 - advanced replay tooling over `event_logs`
@@ -115,9 +116,23 @@ These are the next likely engineering moves after MVP:
   - comparison result (`exact_match`, `compatible_match`, `drift`, `shadow_failed`)
 - This gives the project a schema-first comparison loop without risking state drift in the main recommendation cycle.
 
-### 2. Push path only records decisions
-- `mode='push'` recommendation records are created.
-- External delivery and delivery-result handling are still absent.
+### 2. Push delivery is now single-channel and audit-backed
+- `mode='push'` recommendation records can now move through:
+  - `generated`
+  - `sent`
+  - `failed`
+  - `skipped`
+- Real outbound delivery now exists for a single channel:
+  - `webhook_sink`
+- Delivery attempts are audited in `push_delivery_attempts`, including:
+  - request payload
+  - response status
+  - response/error detail
+  - per-attempt timestamps
+- This is intentionally still v1:
+  - no HMAC signing
+  - no per-user push settings
+  - no open/disable feedback loop yet
 
 ### 3. Replay / rebuild exists in principle, not as a finished tool
 - Fact and snapshot layers are separated correctly.
@@ -141,7 +156,7 @@ The next priorities are:
 Latest local verification status:
 
 - full test suite passes through the local junction path
-- current backend count: `99 passed`
+- current backend count: `120 passed`
 - frontend integration has been validated through:
   - frontend tests
   - direct API/proxy smoke
@@ -154,5 +169,9 @@ Latest local verification status:
   - deterministic authoritative profile writes
   - Gemini shadow profile comparison writes
   - exact / compatible / drift / shadow_failed comparison result coverage
+- real push delivery verification now includes:
+  - webhook sink delivery service
+  - per-attempt audit rows in `push_delivery_attempts`
+  - worker-off and worker-on delivery wiring tests
 - application uses real PostgreSQL locally
 - initial migration has been applied to the local `dln` database

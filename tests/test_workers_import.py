@@ -9,6 +9,7 @@ def test_celery_imports_are_registered():
         "app.workers.enrich_active_nodes",
         "app.workers.compress_event_logs",
         "app.workers.evaluate_push_opportunities",
+        "app.workers.deliver_push_recommendation",
     }
 
     assert expected_tasks.issubset(celery_app.tasks.keys())

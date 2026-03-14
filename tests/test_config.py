@@ -14,6 +14,11 @@ def test_settings_use_environment_override(monkeypatch):
     monkeypatch.setenv("STRUCTURED_PARSER_TIMEOUT_SECONDS", "12.5")
     monkeypatch.setenv("STRUCTURED_PROFILE_MODEL_NAME", "test-profile-model")
     monkeypatch.setenv("STRUCTURED_PROFILE_TIMEOUT_SECONDS", "9.5")
+    monkeypatch.setenv("PUSH_DELIVERY_ENABLED", "false")
+    monkeypatch.setenv("PUSH_DELIVERY_CHANNEL", "webhook_sink")
+    monkeypatch.setenv("PUSH_WEBHOOK_URL", "https://example.test/push")
+    monkeypatch.setenv("PUSH_WEBHOOK_TIMEOUT_SECONDS", "12")
+    monkeypatch.setenv("PUSH_DELIVERY_MAX_ATTEMPTS", "4")
     monkeypatch.setenv("OPENAI_BASE_URL", "https://api.example.test/v1")
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
     get_settings.cache_clear()
@@ -33,6 +38,11 @@ def test_settings_use_environment_override(monkeypatch):
     assert settings.structured_parser_timeout_seconds == 12.5
     assert settings.structured_profile_model_name == "test-profile-model"
     assert settings.structured_profile_timeout_seconds == 9.5
+    assert settings.push_delivery_enabled is False
+    assert settings.push_delivery_channel == "webhook_sink"
+    assert settings.push_webhook_url == "https://example.test/push"
+    assert settings.push_webhook_timeout_seconds == 12
+    assert settings.push_delivery_max_attempts == 4
     assert settings.openai_base_url == "https://api.example.test/v1"
     assert settings.openai_api_key == "sk-test"
 

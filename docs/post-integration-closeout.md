@@ -56,7 +56,7 @@ The current MVP can now be described as:
 - recommendation pull works with deterministic ranking
 - feedback persists and affects node signals
 - brief summarizes the current active surface
-- weak push decisions are recorded
+- weak push decisions can now be delivered through a single webhook sink with attempt audit
 
 This has now been verified:
 - by automated tests
@@ -74,8 +74,15 @@ We did not deliberately force browser-visible error states for:
 
 Those states are covered by frontend automated tests, but not yet manually forced in-browser.
 
-### 2. Push remains decision-only
-Weak push records are generated, but there is still no real delivery channel.
+### 2. Push delivery is still intentionally narrow
+Weak push is no longer decision-only:
+- a single webhook sink channel now exists
+- delivery attempts are audited
+
+But v1 still omits:
+- per-user push preferences
+- multi-channel delivery
+- push open / disable event feedback
 
 ### 3. Gemini is connected, but still shadow-first by design
 - The Gemini provider path is now live-validated in:
@@ -92,18 +99,14 @@ Weak push records are generated, but there is still no real delivery channel.
 
 Now that MVP integration is closed enough to move on, the next priorities should be:
 
-1. real push delivery
-   - keep audit records
-   - add actual delivery + result handling
-
-2. replay / rebuild tooling
+1. replay / rebuild tooling
    - make the fact/snapshot separation operationally useful
 
-3. broader canonicalization and drift reduction
+2. broader canonicalization and drift reduction
    - keep extending deterministic fallback where real usage still falls through
    - tighten Gemini prompt/schema based on parser and profile shadow comparison results
 
-4. selective frontend refinement
+3. selective frontend refinement
    - only after parser/push priorities are clearer
    - keep the shell thin unless a real product surface is chosen
 

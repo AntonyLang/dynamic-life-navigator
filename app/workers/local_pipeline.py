@@ -8,6 +8,7 @@ from app.core.logging import log_event
 from app.db.session import SessionLocal
 from app.core.config import get_settings
 from app.services.event_processing import apply_state_patch_from_event, compare_shadow_parser_decision, parse_event_log
+from app.services.push_delivery_service import deliver_push_recommendation
 from app.services.push_service import evaluate_push_opportunities
 
 logger = logging.getLogger(__name__)
@@ -28,6 +29,11 @@ def run_local_event_pipeline(event_id: str) -> None:
         with SessionLocal() as session:
             push_result = evaluate_push_opportunities(session, event_id)
 
+        delivery_result = {"status": "skipped"}
+        if push_result.get("status") == "generated" and push_result.get("recommendation_id") is not None:
+            with SessionLocal() as session:
+                delivery_result = deliver_push_recommendation(session, str(push_result["recommendation_id"]))
+
         comparison_result = {"status": "skipped"}
         if get_settings().parser_shadow_enabled:
             with SessionLocal() as session:
@@ -43,6 +49,7 @@ def run_local_event_pipeline(event_id: str) -> None:
             mental_energy=snapshot.mental_energy,
             physical_energy=snapshot.physical_energy,
             push_status=push_result.get("status"),
+            push_delivery_status=delivery_result.get("status"),
             shadow_compare_status=comparison_result.get("status"),
             comparison_result=comparison_result.get("comparison_result"),
         )

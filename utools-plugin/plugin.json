@@ -1,0 +1,33 @@
+{
+  "pluginName": "Dynamic Life Navigator",
+  "description": "uTools desktop shell for the Dynamic Life Navigator MVP.",
+  "author": "Antony",
+  "homepage": "https://github.com/",
+  "main": "dist/index.html",
+  "preload": "preload.js",
+  "logo": "logo.svg",
+  "single": true,
+  "development": {
+    "main": "http://127.0.0.1:5174/index.html"
+  },
+  "features": [
+    {
+      "code": "shell",
+      "explain": "Open the default assistant shell",
+      "cmds": ["dln", "navigator", "动态导航助手"],
+      "icon": "logo.svg"
+    },
+    {
+      "code": "pull",
+      "explain": "Pull the next recommendation",
+      "cmds": ["dln pull", "下一步建议", "pull recommendation"],
+      "icon": "logo.svg"
+    },
+    {
+      "code": "brief",
+      "explain": "Open the current brief",
+      "cmds": ["dln brief", "进度简报", "brief"],
+      "icon": "logo.svg"
+    }
+  ]
+}
