@@ -20,12 +20,20 @@ def apply_state_patch(event_id: str) -> dict[str, str]:
     with SessionLocal() as session:
         snapshot = apply_state_patch_from_event(session, event_id)
 
+    from app.workers.tasks_compare import compare_parser_decision
     from app.workers.tasks_push_eval import evaluate_push_opportunities
+    from app.core.config import get_settings
+
+    settings = get_settings()
 
     if getattr(celery_app.conf, "task_always_eager", False):
         evaluate_push_opportunities(event_id)
+        if settings.parser_shadow_enabled:
+            compare_parser_decision(event_id)
     else:
         evaluate_push_opportunities.delay(event_id)
+        if settings.parser_shadow_enabled:
+            compare_parser_decision.delay(event_id)
 
     result = {
         "status": "applied",

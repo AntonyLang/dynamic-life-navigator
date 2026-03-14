@@ -58,7 +58,7 @@ def main() -> int:
     print(body.decode("utf-8")[:1200])
 
     try:
-        response_payload = provider._post_generate_content_request(payload)
+        response_payload = provider._post_generate_content_request(request_body=body)
         print("\nRaw response:")
         print(json.dumps(response_payload, ensure_ascii=False, indent=2)[:3000])
     except Exception:

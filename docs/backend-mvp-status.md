@@ -21,6 +21,12 @@ Parser quality has also moved beyond the original English-only MVP heuristic:
 - deterministic rule-driven parsing now covers the first Chinese/English multilingual signal set
 - fallback behavior still exists, but equivalent mental-load / recovery / movement expressions no longer depend on English-only keywords
 - node profiling now shares the same signal vocabulary baseline as event parsing
+- schema-first parser integration now exists behind provider boundaries, with deterministic parsing kept as the authoritative baseline
+- Gemini has been validated in both `worker-off` and `worker-on` live paths, but it is currently used in shadow mode rather than as the primary state-writing parser
+- async node profiling now mirrors the same shadow-first pattern:
+  - deterministic remains authoritative
+  - Gemini can run as a non-authoritative shadow profile provider
+  - profile comparison data is stored in `action_nodes.ai_context`
 
 ## Implemented MVP capabilities
 
@@ -92,9 +98,22 @@ These are real product capabilities, but they are not required to call the curre
 
 These are the next likely engineering moves after MVP:
 
-### 1. Structured output path is still deterministic-only
-- Current parser and profiling paths are conservative deterministic heuristics.
-- The PM allows this ordering for MVP, but future LLM integration should be schema-first with validation and retry/fallback.
+### 1. Structured output path is shadow-first, not primary
+- Schema-first parser providers now exist for:
+  - deterministic
+  - `structured_stub`
+  - `structured_model_shell`
+  - `openai_responses`
+  - `gemini_direct`
+- The current PM-aligned operating mode is:
+  - deterministic remains authoritative
+  - Gemini runs as a non-blocking shadow parser
+  - state updates still come only from the authoritative deterministic parse
+- `event_logs.parse_metadata` now records:
+  - primary parser metadata
+  - shadow parser metadata
+  - comparison result (`exact_match`, `compatible_match`, `drift`, `shadow_failed`)
+- This gives the project a schema-first comparison loop without risking state drift in the main recommendation cycle.
 
 ### 2. Push path only records decisions
 - `mode='push'` recommendation records are created.
@@ -112,20 +131,28 @@ The deterministic multilingual parser expansion has also been completed as the f
 
 The next priorities are:
 
-1. schema-first LLM structured output for parsing/profile/rendering
-2. real push delivery channel and delivery audit outcomes
-3. replay / rebuild tooling over `event_logs`
-4. broader deterministic parser coverage beyond the first multilingual signal pack where heuristics are still intentionally narrow
+1. real push delivery channel and delivery audit outcomes
+2. replay / rebuild tooling over `event_logs`
+3. broader deterministic and canonical Gemini coverage where shadow data still shows drift
+4. operator-facing review surfaces for parser/profile shadow comparison data
 
 ## Verification baseline
 
 Latest local verification status:
 
 - full test suite passes through the local junction path
-- current backend count: `53 passed`
+- current backend count: `99 passed`
 - frontend integration has been validated through:
   - frontend tests
   - direct API/proxy smoke
   - manual browser walkthrough
+- Gemini live parser validation has now been completed through:
+  - `worker-off` with a real AI Studio key
+  - `worker-on` with Redis + Celery
+  - both modes showing `parser_provider=gemini_direct` without transport fallback
+- profiling parity verification now includes:
+  - deterministic authoritative profile writes
+  - Gemini shadow profile comparison writes
+  - exact / compatible / drift / shadow_failed comparison result coverage
 - application uses real PostgreSQL locally
 - initial migration has been applied to the local `dln` database

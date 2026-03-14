@@ -23,6 +23,7 @@ def create_celery_app() -> Celery:
         enable_utc=True,
         task_track_started=True,
         imports=[
+            "app.workers.tasks_compare",
             "app.workers.tasks_parse",
             "app.workers.tasks_profile",
             "app.workers.tasks_scores",
@@ -39,6 +40,7 @@ def create_celery_app() -> Celery:
 celery_app = create_celery_app()
 
 # Import task modules so task registration is deterministic during app startup.
+from app.workers import tasks_compare as _tasks_compare  # noqa: E402,F401
 from app.workers import tasks_compress as _tasks_compress  # noqa: E402,F401
 from app.workers import tasks_enrich as _tasks_enrich  # noqa: E402,F401
 from app.workers import tasks_parse as _tasks_parse  # noqa: E402,F401

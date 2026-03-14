@@ -43,6 +43,38 @@ class AppSettings(BaseSettings):
         default="deterministic",
         description="Internal parser provider selection; deterministic remains the safe default",
     )
+    parser_shadow_enabled: bool = Field(
+        default=True,
+        description="Enable a non-authoritative shadow parser pass for comparison and observability",
+    )
+    parser_shadow_provider: Literal[
+        "deterministic",
+        "structured_stub",
+        "structured_model_shell",
+        "openai_responses",
+        "gemini_direct",
+    ] = Field(
+        default="gemini_direct",
+        description="Internal shadow parser provider selection; runs after authoritative parse/state work",
+    )
+    profile_provider: Literal[
+        "deterministic",
+        "gemini_direct",
+    ] = Field(
+        default="deterministic",
+        description="Internal profiling provider selection; deterministic remains the safe default",
+    )
+    profile_shadow_enabled: bool = Field(
+        default=True,
+        description="Enable a non-authoritative shadow profile pass for comparison and observability",
+    )
+    profile_shadow_provider: Literal[
+        "deterministic",
+        "gemini_direct",
+    ] = Field(
+        default="gemini_direct",
+        description="Internal shadow profile provider selection; runs after authoritative profile backfill",
+    )
     structured_parser_validation_retries: int = Field(
         default=1,
         ge=0,
@@ -58,6 +90,16 @@ class AppSettings(BaseSettings):
         gt=0.0,
         le=300.0,
         description="Timeout budget in seconds for a future model-backed structured parser call",
+    )
+    structured_profile_model_name: str = Field(
+        default="unconfigured-structured-profile",
+        description="Reserved model name for the future structured profile provider",
+    )
+    structured_profile_timeout_seconds: float = Field(
+        default=30.0,
+        gt=0.0,
+        le=300.0,
+        description="Timeout budget in seconds for a future model-backed structured profile call",
     )
 
     database_url: str = Field(

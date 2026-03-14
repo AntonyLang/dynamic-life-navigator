@@ -1,4 +1,4 @@
-"""Gemini Developer API-backed structured parser with deterministic fallback."""
+"""Gemini Developer API-backed structured node profiler with deterministic fallback."""
 
 from __future__ import annotations
 
@@ -9,45 +9,45 @@ import httpx
 from pydantic import ValidationError
 
 from app.core.config import get_settings
-from app.prompts.structured_event_parser_assets import (
-    build_structured_event_parser_model_response_schema,
-    build_structured_event_parser_request,
+from app.prompts.structured_node_profile_assets import (
+    build_structured_node_profile_model_response_schema,
+    build_structured_node_profile_request,
 )
-from app.schemas.parsing import ParserDecisionDTO
-from app.services.parser_provider import (
-    DeterministicEventParserProvider,
-    EventParserProvider,
+from app.schemas.parsing import NodeProfileDecisionDTO
+from app.services.profile_provider import (
+    DeterministicNodeProfileProvider,
+    NodeProfileProvider,
 )
 
 if TYPE_CHECKING:
-    from app.models.event_log import EventLog
+    from app.models.action_node import ActionNode
 
-GEMINI_DIRECT_PARSER_VERSION = "gemini_direct_v1"
+GEMINI_DIRECT_PROFILE_VERSION = "gemini_direct_profile_v0"
 
 
-class GeminiDirectEventParserProvider:
-    """Schema-first parser provider using Gemini's generateContent API."""
+class GeminiDirectNodeProfileProvider:
+    """Schema-first node profile provider using Gemini's generateContent API."""
 
     name = "gemini_direct"
-    parser_version = GEMINI_DIRECT_PARSER_VERSION
+    profile_version = GEMINI_DIRECT_PROFILE_VERSION
 
     def __init__(
         self,
-        fallback_provider: EventParserProvider | None = None,
+        fallback_provider: NodeProfileProvider | None = None,
         *,
         api_key: str | None,
         base_url: str,
         model_name: str,
         timeout_seconds: float,
     ) -> None:
-        self._fallback_provider = fallback_provider or DeterministicEventParserProvider()
+        self._fallback_provider = fallback_provider or DeterministicNodeProfileProvider()
         self._api_key = api_key
         self._base_url = base_url.rstrip("/")
         self._model_name = model_name
         self._timeout_seconds = timeout_seconds
 
-    def build_request_artifacts(self, event: EventLog) -> dict[str, object]:
-        return build_structured_event_parser_request(event, self._model_name)
+    def build_request_artifacts(self, node: ActionNode) -> dict[str, object]:
+        return build_structured_node_profile_request(node, self._model_name)
 
     def build_request_payload(self, request_artifacts: dict[str, object]) -> dict[str, object]:
         return {
@@ -62,18 +62,14 @@ class GeminiDirectEventParserProvider:
             ],
             "generationConfig": {
                 "responseMimeType": "application/json",
-                "responseJsonSchema": build_structured_event_parser_model_response_schema(),
+                "responseJsonSchema": build_structured_node_profile_model_response_schema(),
             },
         }
 
     def build_request_body(self, request_payload: dict[str, object]) -> bytes:
         return json.dumps(request_payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
 
-    def _post_generate_content_request(
-        self,
-        *,
-        request_body: bytes,
-    ) -> dict[str, Any]:
+    def _post_generate_content_request(self, *, request_body: bytes) -> dict[str, Any]:
         with httpx.Client(timeout=self._timeout_seconds, trust_env=False) as client:
             response = client.post(
                 f"{self._base_url}/models/{self._model_name}:generateContent",
@@ -123,12 +119,20 @@ class GeminiDirectEventParserProvider:
     def _normalize_candidate_payload(
         self,
         candidate_payload: dict[str, Any],
+        node: ActionNode,
         request_artifacts: dict[str, object],
     ) -> dict[str, Any]:
         normalized_payload = dict(candidate_payload)
+        profile_payload = dict(normalized_payload.get("profile") or {})
+        profile_payload["ai_context"] = {
+            "profile_method": self.profile_version,
+            "profile_provider": self.name,
+        }
+        normalized_payload["profile"] = profile_payload
+        normalized_payload["node_id"] = str(node.node_id)
         normalized_payload["metadata"] = {
             "provider": self.name,
-            "parser_version": self.parser_version,
+            "profile_version": self.profile_version,
             "prompt_version": request_artifacts["metadata"]["prompt_version"],
             "model_name": request_artifacts["metadata"]["model_name"],
             "fallback_reason": None,
@@ -137,24 +141,14 @@ class GeminiDirectEventParserProvider:
 
     def _generate_candidate_payload(
         self,
+        node: ActionNode,
         request_artifacts: dict[str, object],
         attempt: int,
     ) -> dict[str, Any]:
         del attempt
-        try:
-            request_payload = self.build_request_payload(request_artifacts)
-        except UnicodeError as exc:
-            raise ValueError(f"encoding_error_build_payload::{exc}") from exc
-
-        try:
-            request_body = self.build_request_body(request_payload)
-        except UnicodeError as exc:
-            raise ValueError(f"encoding_error_build_body::{exc}") from exc
-
-        try:
-            response_payload = self._post_generate_content_request(request_body=request_body)
-        except UnicodeError as exc:
-            raise ValueError(f"encoding_error_transport::{exc}") from exc
+        request_payload = self.build_request_payload(request_artifacts)
+        request_body = self.build_request_body(request_payload)
+        response_payload = self._post_generate_content_request(request_body=request_body)
 
         output_text = self._extract_output_text(response_payload)
         if output_text is None:
@@ -164,19 +158,20 @@ class GeminiDirectEventParserProvider:
         if not isinstance(candidate_payload, dict):
             raise ValueError("non_object_json_response")
 
-        return self._normalize_candidate_payload(candidate_payload, request_artifacts)
+        return self._normalize_candidate_payload(candidate_payload, node, request_artifacts)
 
-    def parse(self, event: EventLog) -> ParserDecisionDTO:
-        request_artifacts = self.build_request_artifacts(event)
-        delegated = self._fallback_provider.parse(event)
+    def profile(self, node: ActionNode) -> NodeProfileDecisionDTO:
+        request_artifacts = self.build_request_artifacts(node)
+        delegated = self._fallback_provider.profile(node)
 
         if not self._api_key:
-            return ParserDecisionDTO(
+            return NodeProfileDecisionDTO(
                 status=delegated.status,
-                impact=delegated.impact,
+                node_id=delegated.node_id,
+                profile=delegated.profile,
                 metadata={
                     "provider": self.name,
-                    "parser_version": self.parser_version,
+                    "profile_version": self.profile_version,
                     "prompt_version": str(request_artifacts["metadata"]["prompt_version"]),
                     "model_name": str(request_artifacts["metadata"]["model_name"]),
                     "fallback_reason": "missing_gemini_api_key",
@@ -189,8 +184,8 @@ class GeminiDirectEventParserProvider:
 
         for attempt in range(1, max_attempts + 1):
             try:
-                candidate_payload = self._generate_candidate_payload(request_artifacts, attempt)
-                return ParserDecisionDTO.model_validate(candidate_payload)
+                candidate_payload = self._generate_candidate_payload(node, request_artifacts, attempt)
+                return NodeProfileDecisionDTO.model_validate(candidate_payload)
             except json.JSONDecodeError:
                 last_error_reason = "invalid_json_response"
                 last_error_detail = None
@@ -204,20 +199,16 @@ class GeminiDirectEventParserProvider:
                 last_error_reason = "encoding_error"
                 last_error_detail = f"{exc.__class__.__name__}: {exc}"[:300]
             except ValueError as exc:
-                reason_detail = str(exc)
-                if "::" in reason_detail:
-                    last_error_reason, last_error_detail = reason_detail.split("::", maxsplit=1)
-                    last_error_detail = last_error_detail[:300]
-                else:
-                    last_error_reason = reason_detail
-                    last_error_detail = None
+                last_error_reason = str(exc)
+                last_error_detail = None
 
-        return ParserDecisionDTO(
+        return NodeProfileDecisionDTO(
             status=delegated.status,
-            impact=delegated.impact,
+            node_id=delegated.node_id,
+            profile=delegated.profile,
             metadata={
                 "provider": self.name,
-                "parser_version": self.parser_version,
+                "profile_version": self.profile_version,
                 "prompt_version": str(request_artifacts["metadata"]["prompt_version"]),
                 "model_name": str(request_artifacts["metadata"]["model_name"]),
                 "fallback_reason": f"{last_error_reason}_fallback_after_{max_attempts}_attempts",

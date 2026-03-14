@@ -10,7 +10,12 @@ from app.db.session import SessionLocal
 from app.models.event_log import EventLog
 from app.models.state_history import StateHistory
 from app.models.user_state import UserState
-from app.services.event_processing import apply_state_patch_from_event, parse_event_log
+from app.schemas.parsing import ParserDecisionDTO
+from app.services.event_processing import (
+    apply_state_patch_from_event,
+    compare_shadow_parser_decision,
+    parse_event_log,
+)
 
 settings = get_settings()
 
@@ -65,6 +70,7 @@ def test_parse_and_apply_state_patch_updates_snapshot(cleanup_db_artifacts, user
             assert impact["event_type"] == "chat_update"
             assert impact["mental_delta"] < 0
             assert refreshed_event.parse_status == "success"
+            assert refreshed_event.parse_metadata["primary"]["provider"] == "deterministic"
             assert snapshot.focus_mode == "tired"
             assert refreshed_state.state_version == original_version + 1
             assert refreshed_state.mental_energy <= original_mental
@@ -289,5 +295,203 @@ def test_apply_state_patch_retries_on_compare_and_swap_conflict(monkeypatch, cle
             assert snapshot.focus_mode == "tired"
             assert refreshed_state.state_version == original_state["state_version"] + 1
             assert history is not None
+        finally:
+            cleanup_db_artifacts.event_ids(event_id)
+
+
+def test_shadow_compare_records_exact_match_without_mutating_state(monkeypatch, cleanup_db_artifacts, user_state_guard):
+    event_id = uuid4()
+
+    class DummyShadowProvider:
+        def parse(self, event):
+            return ParserDecisionDTO.model_validate(
+                {
+                    "status": "success",
+                    "impact": {
+                        "event_summary": event.raw_text,
+                        "event_type": "chat_update",
+                        "mental_delta": -20,
+                        "physical_delta": 0,
+                        "focus_mode": "tired",
+                        "tags": ["mental_load"],
+                        "should_offer_pull_hint": True,
+                        "confidence": 0.7,
+                    },
+                    "metadata": {
+                        "provider": "gemini_direct",
+                        "parser_version": "gemini_direct_v1",
+                        "prompt_version": "structured_event_parser_prompt_v1",
+                        "model_name": "gemini-2.5-flash",
+                    },
+                }
+            )
+
+    with SessionLocal() as session:
+        original_state = user_state_guard
+        _persist_event_log(
+            session,
+            event_id=event_id,
+            raw_text="\u521a\u505a\u5b8c\u5f88\u91cd\u7684\u8111\u529b\u6d3b\uff0c\u60f3\u5148\u7f13\u4e00\u4e0b\u3002",
+            external_prefix="shadow-exact",
+        )
+
+        try:
+            parse_event_log(session, event_id)
+            snapshot = apply_state_patch_from_event(session, event_id)
+            monkeypatch.setattr("app.services.event_processing.get_shadow_event_parser_provider", lambda: DummyShadowProvider())
+
+            result = compare_shadow_parser_decision(session, event_id)
+            refreshed_event = session.get(EventLog, event_id)
+            refreshed_state = session.get(UserState, settings.default_user_id)
+
+            assert result["comparison_result"] == "exact_match"
+            assert refreshed_event.parse_metadata["shadow"]["shadow_provider"] == "gemini_direct"
+            assert refreshed_event.parse_metadata["comparison_result"] == "exact_match"
+            assert refreshed_state.state_version == original_state["state_version"] + 1
+            assert snapshot.focus_mode == "tired"
+        finally:
+            cleanup_db_artifacts.event_ids(event_id)
+
+
+def test_shadow_compare_records_compatible_match(monkeypatch, cleanup_db_artifacts, user_state_guard):
+    event_id = uuid4()
+
+    class DummyShadowProvider:
+        def parse(self, event):
+            return ParserDecisionDTO.model_validate(
+                {
+                    "status": "success",
+                    "impact": {
+                        "event_summary": event.raw_text,
+                        "event_type": "chat_update",
+                        "mental_delta": -17,
+                        "physical_delta": 0,
+                        "focus_mode": "tired",
+                        "tags": ["mental_load", "recovery_needed"],
+                        "should_offer_pull_hint": True,
+                        "confidence": 0.8,
+                    },
+                    "metadata": {
+                        "provider": "gemini_direct",
+                        "parser_version": "gemini_direct_v1",
+                    },
+                }
+            )
+
+    with SessionLocal() as session:
+        _persist_event_log(
+            session,
+            event_id=event_id,
+            raw_text="I am drained after debugging all afternoon.",
+            external_prefix="shadow-compatible",
+        )
+
+        try:
+            parse_event_log(session, event_id)
+            apply_state_patch_from_event(session, event_id)
+            monkeypatch.setattr("app.services.event_processing.get_shadow_event_parser_provider", lambda: DummyShadowProvider())
+
+            result = compare_shadow_parser_decision(session, event_id)
+            refreshed_event = session.get(EventLog, event_id)
+
+            assert result["comparison_result"] == "compatible_match"
+            assert refreshed_event.parse_metadata["comparison_result"] == "compatible_match"
+        finally:
+            cleanup_db_artifacts.event_ids(event_id)
+
+
+def test_shadow_compare_records_drift(monkeypatch, cleanup_db_artifacts, user_state_guard):
+    event_id = uuid4()
+
+    class DummyShadowProvider:
+        def parse(self, event):
+            return ParserDecisionDTO.model_validate(
+                {
+                    "status": "success",
+                    "impact": {
+                        "event_summary": event.raw_text,
+                        "event_type": "rest",
+                        "mental_delta": 15,
+                        "physical_delta": 10,
+                        "focus_mode": "recovered",
+                        "tags": ["recovery"],
+                        "should_offer_pull_hint": False,
+                        "confidence": 0.7,
+                    },
+                    "metadata": {
+                        "provider": "gemini_direct",
+                        "parser_version": "gemini_direct_v1",
+                    },
+                }
+            )
+
+    with SessionLocal() as session:
+        _persist_event_log(
+            session,
+            event_id=event_id,
+            raw_text="I am drained after debugging all afternoon.",
+            external_prefix="shadow-drift",
+        )
+
+        try:
+            parse_event_log(session, event_id)
+            apply_state_patch_from_event(session, event_id)
+            monkeypatch.setattr("app.services.event_processing.get_shadow_event_parser_provider", lambda: DummyShadowProvider())
+
+            result = compare_shadow_parser_decision(session, event_id)
+            refreshed_event = session.get(EventLog, event_id)
+
+            assert result["comparison_result"] == "drift"
+            assert refreshed_event.parse_metadata["comparison_result"] == "drift"
+        finally:
+            cleanup_db_artifacts.event_ids(event_id)
+
+
+def test_shadow_compare_records_shadow_failed_when_provider_falls_back(monkeypatch, cleanup_db_artifacts, user_state_guard):
+    event_id = uuid4()
+
+    class DummyShadowProvider:
+        def parse(self, event):
+            return ParserDecisionDTO.model_validate(
+                {
+                    "status": "success",
+                    "impact": {
+                        "event_summary": event.raw_text,
+                        "event_type": "chat_update",
+                        "mental_delta": -20,
+                        "physical_delta": 0,
+                        "focus_mode": "tired",
+                        "tags": ["mental_load"],
+                        "should_offer_pull_hint": True,
+                        "confidence": 0.7,
+                    },
+                    "metadata": {
+                        "provider": "gemini_direct",
+                        "parser_version": "gemini_direct_v1",
+                        "fallback_reason": "validation_error_fallback_after_2_attempts",
+                        "error_detail": "simulated drift",
+                    },
+                }
+            )
+
+    with SessionLocal() as session:
+        _persist_event_log(
+            session,
+            event_id=event_id,
+            raw_text="I am drained after debugging all afternoon.",
+            external_prefix="shadow-failed",
+        )
+
+        try:
+            parse_event_log(session, event_id)
+            apply_state_patch_from_event(session, event_id)
+            monkeypatch.setattr("app.services.event_processing.get_shadow_event_parser_provider", lambda: DummyShadowProvider())
+
+            result = compare_shadow_parser_decision(session, event_id)
+            refreshed_event = session.get(EventLog, event_id)
+
+            assert result["comparison_result"] == "shadow_failed"
+            assert refreshed_event.parse_metadata["shadow"]["shadow_fallback_reason"] == "validation_error_fallback_after_2_attempts"
+            assert refreshed_event.parse_metadata["comparison_result"] == "shadow_failed"
         finally:
             cleanup_db_artifacts.event_ids(event_id)

@@ -20,7 +20,7 @@ That means the project is no longer in a "backend ready, frontend still theoreti
 - FastAPI + PostgreSQL + Redis + Celery stack is in place
 - core fact/snapshot/recommendation tables are live
 - full backend suite passes locally
-- latest baseline: `53 passed`
+- latest baseline: `89 passed`
 
 ### Frontend baseline
 - React + Vite thin client is in place
@@ -77,25 +77,33 @@ Those states are covered by frontend automated tests, but not yet manually force
 ### 2. Push remains decision-only
 Weak push records are generated, but there is still no real delivery channel.
 
+### 3. Gemini is connected, but still shadow-first by design
+- The Gemini provider path is now live-validated in:
+  - `worker-off`
+  - `worker-on`
+- That means schema-first Gemini parsing is no longer merely theoretical.
+- However, Gemini is intentionally not the authoritative parser yet.
+- The current PM-aligned operating mode is:
+  - deterministic is the primary parser and state-writing authority
+  - Gemini runs as a non-authoritative shadow parser for comparison and observability
+- This keeps the state/recommendation loop conservative while real shadow data is collected.
+
 ## Recommended next phase
 
 Now that MVP integration is closed enough to move on, the next priorities should be:
 
-1. schema-first LLM structured parsing
-   - keep the current deterministic multilingual rules as the fallback baseline
-   - add runtime validation, retry, and deterministic fallback
-
-2. real push delivery
+1. real push delivery
    - keep audit records
    - add actual delivery + result handling
 
-3. replay / rebuild tooling
+2. replay / rebuild tooling
    - make the fact/snapshot separation operationally useful
 
-4. broader deterministic fallback coverage
-   - keep extending only where real usage still falls through
+3. broader canonicalization and drift reduction
+   - keep extending deterministic fallback where real usage still falls through
+   - tighten Gemini prompt/schema based on parser and profile shadow comparison results
 
-5. selective frontend refinement
+4. selective frontend refinement
    - only after parser/push priorities are clearer
    - keep the shell thin unless a real product surface is chosen
 
@@ -115,3 +123,4 @@ Primary documents for the current state:
 - `docs/frontend-backend-integration-checklist.md`
 - `docs/frontend-backend-integration-issues.md`
 - `docs/development-logs/2026-03-13.md`
+- `docs/development-logs/2026-03-14.md`

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import json
 from uuid import uuid4
 
 from app.core.config import get_settings
 from app.models.event_log import EventLog
 from app.prompts.structured_event_parser_assets import (
     STRUCTURED_EVENT_PARSER_PROMPT_VERSION,
+    build_structured_event_parser_payload_summary,
     build_structured_event_parser_request,
     build_structured_event_parser_response_schema,
     load_structured_event_parser_system_prompt,
@@ -20,6 +22,7 @@ from app.services.parser_provider import (
     StructuredModelShellEventParserProvider,
     StructuredStubEventParserProvider,
     get_event_parser_provider,
+    get_shadow_event_parser_provider,
 )
 
 settings = get_settings()
@@ -223,6 +226,32 @@ def test_structured_event_parser_assets_expose_prompt_and_schema():
     assert response_schema["title"] == "ParserDecisionDTO"
     assert "status" in response_schema["properties"]
     assert "metadata" in response_schema["properties"]
+    schema_json = json.dumps(response_schema, ensure_ascii=False)
+    assert '"chat_update"' in schema_json
+    assert '"coordination"' in schema_json
+    assert '"recovered"' in schema_json
+
+
+def test_structured_event_parser_payload_summary_deduplicates_raw_text_and_escapes_unicode():
+    zh_text = "\u521a\u505a\u5b8c\u5f88\u91cd\u7684\u8111\u529b\u6d3b\uff0c\u60f3\u5148\u7f13\u4e00\u4e0b\u3002"
+    event = _build_event(
+        raw_text=zh_text,
+        raw_payload={
+            "text": zh_text,
+            "channel": "frontend_web_shell",
+            "message_type": "text",
+            "client_message_id": "client-123",
+        },
+    )
+
+    payload_summary = build_structured_event_parser_payload_summary(event)
+    request_artifacts = build_structured_event_parser_request(event, "demo-model")
+
+    assert f'"text": "{zh_text}"' not in payload_summary
+    assert "\\u521a\\u505a" not in request_artifacts["user_prompt"]
+    assert f"raw_text: {zh_text}" in request_artifacts["user_prompt"]
+    assert '"channel": "frontend_web_shell"' in payload_summary
+    assert '"client_message_id": "client-123"' in payload_summary
 
 
 def test_structured_model_shell_provider_builds_request_artifacts():
@@ -285,4 +314,31 @@ def test_get_event_parser_provider_supports_structured_model_shell(monkeypatch):
 
     assert provider.name == "structured_model_shell"
     assert isinstance(provider, StructuredModelShellEventParserProvider)
+    get_settings.cache_clear()
+
+
+def test_get_shadow_event_parser_provider_uses_configured_provider(monkeypatch):
+    monkeypatch.setenv("PARSER_PROVIDER", "deterministic")
+    monkeypatch.setenv("PARSER_SHADOW_ENABLED", "true")
+    monkeypatch.setenv("PARSER_SHADOW_PROVIDER", "gemini_direct")
+    monkeypatch.setenv("GEMINI_API_KEY", "gemini-test-key")
+    monkeypatch.setenv("STRUCTURED_PARSER_MODEL_NAME", "gemini-2.5-flash")
+    get_settings.cache_clear()
+
+    provider = get_shadow_event_parser_provider()
+
+    assert provider is not None
+    assert provider.name == "gemini_direct"
+    get_settings.cache_clear()
+
+
+def test_get_shadow_event_parser_provider_skips_when_same_as_primary(monkeypatch):
+    monkeypatch.setenv("PARSER_PROVIDER", "gemini_direct")
+    monkeypatch.setenv("PARSER_SHADOW_ENABLED", "true")
+    monkeypatch.setenv("PARSER_SHADOW_PROVIDER", "gemini_direct")
+    get_settings.cache_clear()
+
+    provider = get_shadow_event_parser_provider()
+
+    assert provider is None
     get_settings.cache_clear()

@@ -263,23 +263,18 @@ _DETERMINISTIC_PROVIDER = DeterministicEventParserProvider()
 _STRUCTURED_STUB_PROVIDER = StructuredStubEventParserProvider(_DETERMINISTIC_PROVIDER)
 
 
-def get_event_parser_provider() -> EventParserProvider:
-    """Return the active parser provider.
-
-    Structured selection is intentionally small here: deterministic remains
-    the default, and the structured stub delegates back to deterministic so
-    behavior stays stable until a validated LLM-backed parser exists.
-    """
+def build_event_parser_provider(provider_name: str) -> EventParserProvider:
+    """Build a named parser provider using the current settings snapshot."""
 
     settings = get_settings()
-    if settings.parser_provider == "structured_stub":
+    if provider_name == "structured_stub":
         return _STRUCTURED_STUB_PROVIDER
-    if settings.parser_provider == "structured_model_shell":
+    if provider_name == "structured_model_shell":
         return StructuredModelShellEventParserProvider(
             _DETERMINISTIC_PROVIDER,
             model_name=settings.structured_parser_model_name,
         )
-    if settings.parser_provider == "openai_responses":
+    if provider_name == "openai_responses":
         from app.services.openai_responses_parser import OpenAIResponsesEventParserProvider
 
         return OpenAIResponsesEventParserProvider(
@@ -289,7 +284,7 @@ def get_event_parser_provider() -> EventParserProvider:
             model_name=settings.structured_parser_model_name,
             timeout_seconds=settings.structured_parser_timeout_seconds,
         )
-    if settings.parser_provider == "gemini_direct":
+    if provider_name == "gemini_direct":
         from app.services.gemini_direct_parser import GeminiDirectEventParserProvider
 
         return GeminiDirectEventParserProvider(
@@ -300,3 +295,20 @@ def get_event_parser_provider() -> EventParserProvider:
             timeout_seconds=settings.structured_parser_timeout_seconds,
         )
     return _DETERMINISTIC_PROVIDER
+
+
+def get_event_parser_provider() -> EventParserProvider:
+    """Return the configured authoritative parser provider."""
+
+    return build_event_parser_provider(get_settings().parser_provider)
+
+
+def get_shadow_event_parser_provider() -> EventParserProvider | None:
+    """Return the configured shadow parser provider if enabled."""
+
+    settings = get_settings()
+    if not settings.parser_shadow_enabled:
+        return None
+    if settings.parser_shadow_provider == settings.parser_provider:
+        return None
+    return build_event_parser_provider(settings.parser_shadow_provider)

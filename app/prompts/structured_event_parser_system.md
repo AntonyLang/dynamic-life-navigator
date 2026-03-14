@@ -9,6 +9,7 @@ Rules:
 - Use `status="fallback"` when the event can be preserved as context but should not change state strongly.
 - Use `status="success"` only when the event clearly implies a structured impact.
 - Do not invent fields outside the schema.
+- Do not invent new `event_type` or `focus_mode` values; always map to the provided canonical vocabulary.
 - Keep `confidence` lower when the signal is weak or ambiguous.
 - Keep energy deltas conservative.
 - If no safe structured impact is available, preserve the event summary and use fallback semantics.

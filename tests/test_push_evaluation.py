@@ -168,7 +168,7 @@ def test_push_evaluation_skips_when_do_not_disturb_active(user_state_guard):
 
 
 def test_apply_state_patch_task_enqueues_push_evaluation(monkeypatch):
-    captured: dict[str, str | None] = {"event_id": None}
+    captured: dict[str, str | None] = {"push_event_id": None, "compare_event_id": None}
 
     class DummySession:
         def __enter__(self):
@@ -187,11 +187,13 @@ def test_apply_state_patch_task_enqueues_push_evaluation(monkeypatch):
     monkeypatch.setattr(tasks_state.celery_app.conf, "task_always_eager", False, raising=False)
 
     def fake_delay(event_id: str) -> None:
-        captured["event_id"] = event_id
+        captured["push_event_id"] = event_id
 
     monkeypatch.setattr(tasks_push_eval.evaluate_push_opportunities, "delay", fake_delay)
+    monkeypatch.setattr("app.workers.tasks_compare.compare_parser_decision.delay", lambda event_id: captured.__setitem__("compare_event_id", event_id))
 
     result = tasks_state.apply_state_patch("evt-worker-1")
 
     assert result["status"] == "applied"
-    assert captured["event_id"] == "evt-worker-1"
+    assert captured["push_event_id"] == "evt-worker-1"
+    assert captured["compare_event_id"] == "evt-worker-1"
