@@ -11,3 +11,5 @@ Rules:
 - Keep estimated minutes realistic for a single actionable task.
 - Use context tags only when the signal is clear from title, summary, or tags.
 - If uncertain, choose lower confidence rather than inventing specificity.
+- Prefer `light_admin` for inbox / cleanup / archive style tasks instead of inventing a deeper-focus interpretation.
+- Prefer `deep_focus` for debugging, report writing, research, or study style tasks when the signal is clear.

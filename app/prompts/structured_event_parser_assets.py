@@ -14,10 +14,17 @@ if TYPE_CHECKING:
 
 
 PROMPT_DIR = Path(__file__).resolve().parent
-STRUCTURED_EVENT_PARSER_PROMPT_VERSION = "structured_event_parser_prompt_v1"
+STRUCTURED_EVENT_PARSER_PROMPT_VERSION = "structured_event_parser_prompt_v2"
 STRUCTURED_EVENT_PARSER_SYSTEM_PROMPT_PATH = PROMPT_DIR / "structured_event_parser_system.md"
 CANONICAL_EVENT_TYPES: tuple[str, ...] = CanonicalEventType.__args__
 CANONICAL_FOCUS_MODES: tuple[str, ...] = CanonicalFocusMode.__args__
+CANONICAL_EVENT_EXAMPLES: tuple[str, ...] = (
+    "- mentally drained after debugging / 脑力活后想缓一下 -> event_type=chat_update, focus_mode=tired",
+    "- took a break, nap, or recovered after resting -> event_type=rest, focus_mode=recovered",
+    "- walk, run, ride, or exercise -> event_type=exercise, focus_mode=recovered",
+    "- organize inbox, cleanup, archive, or 整理归档 -> event_type=light_admin, focus_mode=light_admin",
+    "- call, meeting, sync, or 沟通讨论 -> event_type=coordination, focus_mode=social",
+)
 
 
 @lru_cache(maxsize=1)
@@ -54,6 +61,9 @@ def build_structured_event_parser_user_prompt(event: EventLog) -> str:
             f"allowed_event_types: {', '.join(CANONICAL_EVENT_TYPES)}",
             f"allowed_focus_modes: {', '.join(repr(value) for value in CANONICAL_FOCUS_MODES)}",
             "Map the event to the canonical vocabulary above. Do not invent new event_type or focus_mode values.",
+            "Canonical examples:",
+            *CANONICAL_EVENT_EXAMPLES,
+            "Guardrail: wanting to rest because the user is mentally drained is still chat_update+tired, not rest+recovered.",
             f"source: {event.source}",
             f"source_event_type: {event.source_event_type or ''}",
             f"occurred_at: {event.occurred_at.isoformat() if event.occurred_at is not None else ''}",

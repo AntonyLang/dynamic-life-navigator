@@ -619,7 +619,7 @@ def test_chat_message_route_shadow_gemini_worker_off_keeps_deterministic_state(
                 "metadata": {
                     "provider": "gemini_direct",
                     "parser_version": "gemini_direct_v1",
-                    "prompt_version": "structured_event_parser_prompt_v1",
+                    "prompt_version": "structured_event_parser_prompt_v2",
                     "model_name": "gemini-2.5-flash",
                 },
             }
@@ -717,7 +717,7 @@ def test_chat_message_route_shadow_gemini_worker_dispatch_keeps_deterministic_st
                 "metadata": {
                     "provider": "gemini_direct",
                     "parser_version": "gemini_direct_v1",
-                    "prompt_version": "structured_event_parser_prompt_v1",
+                    "prompt_version": "structured_event_parser_prompt_v2",
                     "model_name": "gemini-2.5-flash",
                 },
             }

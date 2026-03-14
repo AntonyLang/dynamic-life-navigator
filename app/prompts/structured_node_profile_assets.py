@@ -18,10 +18,16 @@ if TYPE_CHECKING:
 
 
 PROMPT_DIR = Path(__file__).resolve().parent
-STRUCTURED_NODE_PROFILE_PROMPT_VERSION = "structured_node_profile_prompt_v1"
+STRUCTURED_NODE_PROFILE_PROMPT_VERSION = "structured_node_profile_prompt_v2"
 STRUCTURED_NODE_PROFILE_SYSTEM_PROMPT_PATH = PROMPT_DIR / "structured_node_profile_system.md"
 CANONICAL_PROFILE_CONTEXT_TAGS: tuple[str, ...] = CanonicalProfileContextTag.__args__
 CANONICAL_PROFILE_CONFIDENCE_LEVELS: tuple[str, ...] = CanonicalProfileConfidenceLevel.__args__
+CANONICAL_PROFILE_EXAMPLES: tuple[str, ...] = (
+    "- organize inbox, cleanup, archive, or 整理归档 -> recommended_context_tags=[light_admin]",
+    "- debugging, report writing, research, or 调试写报告 -> recommended_context_tags=[deep_focus]",
+    "- walk, run, ride, or exercise -> recommended_context_tags=[movement]",
+    "- call, meeting, sync, or 沟通讨论 -> recommended_context_tags=[social]",
+)
 
 
 @lru_cache(maxsize=1)
@@ -41,6 +47,8 @@ def build_structured_node_profile_user_prompt(node: ActionNode) -> str:
             f"allowed_context_tags: {', '.join(CANONICAL_PROFILE_CONTEXT_TAGS)}",
             f"allowed_confidence_levels: {', '.join(CANONICAL_PROFILE_CONFIDENCE_LEVELS)}",
             "Map the node to the canonical vocabulary above. Do not invent new context tags or confidence levels.",
+            "Canonical examples:",
+            *CANONICAL_PROFILE_EXAMPLES,
             f"title: {node.title}",
             f"summary: {node.summary or ''}",
             f"tags_json: {tags_json}",

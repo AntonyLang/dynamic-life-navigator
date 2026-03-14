@@ -115,6 +115,10 @@ These are the next likely engineering moves after MVP:
   - shadow parser metadata
   - comparison result (`exact_match`, `compatible_match`, `drift`, `shadow_failed`)
 - This gives the project a schema-first comparison loop without risking state drift in the main recommendation cycle.
+- A first drift-reduction pass has also been applied to the structured parser/profile prompts:
+  - prompt assets now include explicit canonical examples
+  - prompt versions have advanced to `structured_event_parser_prompt_v2` and `structured_node_profile_prompt_v2`
+  - the known "drained and want to rest" ambiguity is now explicitly biased toward `chat_update` / `tired`
 
 ### 2. Push delivery is now single-channel and audit-backed
 - `mode='push'` recommendation records can now move through:
@@ -134,9 +138,34 @@ These are the next likely engineering moves after MVP:
   - no per-user push settings
   - no open/disable feedback loop yet
 
-### 3. Replay / rebuild exists in principle, not as a finished tool
+### 3. Replay / rebuild now exists as a dry-run operator CLI
 - Fact and snapshot layers are separated correctly.
-- There is no operator-facing replay command or rebuild script yet.
+- Operator-facing dry-run tooling now exists for:
+  - single-event replay against recorded `state_history`
+  - checkpoint-based rebuild of the current snapshot
+- Replay / rebuild correctness has now been hardened for bounded windows:
+  - bounded rebuild no longer compares historical dry-runs against the current persisted snapshot
+  - checkpoint anchors and replay rows that share the same timestamp no longer skip the first patch
+  - rebuild reports now expose an explicit `comparison_target`
+- v1 is intentionally dry-run only:
+  - no write-back to `user_state`
+  - no admin API
+  - no automatic repair
+- The current rebuild strategy is explicitly conservative:
+  - use `state_history` ordering for authoritative replay
+  - use the latest non-`event_patch` history row as checkpoint
+  - fall back to genesis defaults when no checkpoint exists
+
+### 4. Operator-facing shadow review surfaces now exist
+- Parser/profile shadow data is no longer only queryable by digging through raw JSON.
+- Operator-facing CLI scripts now exist for:
+  - recent parser shadow drift review
+  - recent profile shadow drift review
+- These scripts currently provide:
+  - aggregate counts for `exact_match`, `compatible_match`, `drift`, `shadow_failed`
+  - flagged parser events
+  - flagged profile nodes
+- This keeps the project in the PM-aligned "shadow first" mode while making review practical.
 
 ## Recommended next phase after MVP
 
@@ -146,17 +175,16 @@ The deterministic multilingual parser expansion has also been completed as the f
 
 The next priorities are:
 
-1. real push delivery channel and delivery audit outcomes
-2. replay / rebuild tooling over `event_logs`
-3. broader deterministic and canonical Gemini coverage where shadow data still shows drift
-4. operator-facing review surfaces for parser/profile shadow comparison data
+1. broader deterministic and canonical Gemini coverage where shadow data still shows drift
+2. use the new shadow review surfaces to drive targeted parser/profile drift reduction
+3. only then reconsider a guarded rebuild `apply` mode once dry-run confidence is high
 
 ## Verification baseline
 
 Latest local verification status:
 
 - full test suite passes through the local junction path
-- current backend count: `120 passed`
+- current backend count: `143 passed`
 - frontend integration has been validated through:
   - frontend tests
   - direct API/proxy smoke
@@ -173,5 +201,16 @@ Latest local verification status:
   - webhook sink delivery service
   - per-attempt audit rows in `push_delivery_attempts`
   - worker-off and worker-on delivery wiring tests
+- replay / rebuild verification now includes:
+  - reducer parity coverage against recorded `state_history`
+  - single-event replay report coverage
+  - checkpoint-based rebuild report coverage
+  - bounded-window correctness coverage
+  - explicit comparison-target reporting
+  - CLI `--help` coverage for both operator scripts
+- shadow review verification now includes:
+  - parser shadow summary service coverage
+  - profile shadow summary service coverage
+  - CLI `--help` and JSON output coverage for both review scripts
 - application uses real PostgreSQL locally
 - initial migration has been applied to the local `dln` database

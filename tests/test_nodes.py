@@ -211,7 +211,7 @@ def test_profile_action_node_records_shadow_drift_without_overwriting_primary_fi
                 "metadata": {
                     "provider": "gemini_direct",
                     "profile_version": "gemini_direct_profile_v0",
-                    "prompt_version": "structured_node_profile_prompt_v1",
+                    "prompt_version": "structured_node_profile_prompt_v2",
                     "model_name": "gemini-2.5-flash",
                 },
             }

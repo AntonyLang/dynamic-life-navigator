@@ -20,7 +20,7 @@ That means the project is no longer in a "backend ready, frontend still theoreti
 - FastAPI + PostgreSQL + Redis + Celery stack is in place
 - core fact/snapshot/recommendation tables are live
 - full backend suite passes locally
-- latest baseline: `89 passed`
+- latest baseline: `143 passed`
 
 ### Frontend baseline
 - React + Vite thin client is in place
@@ -95,16 +95,23 @@ But v1 still omits:
   - Gemini runs as a non-authoritative shadow parser for comparison and observability
 - This keeps the state/recommendation loop conservative while real shadow data is collected.
 
+### 4. Replay/rebuild and shadow review are now operator-usable
+- replay/rebuild remains dry-run only, but bounded-window correctness has now been hardened
+- parser/profile shadow comparison data now has dedicated operator CLI review surfaces
+- this means the current post-MVP work can be driven by actual drift reports rather than ad hoc log inspection
+
 ## Recommended next phase
 
 Now that MVP integration is closed enough to move on, the next priorities should be:
 
-1. replay / rebuild tooling
-   - make the fact/snapshot separation operationally useful
-
-2. broader canonicalization and drift reduction
+1. broader canonicalization and drift reduction
+   - use the new replay/rebuild hardening and shadow review surfaces as the evidence base
    - keep extending deterministic fallback where real usage still falls through
    - tighten Gemini prompt/schema based on parser and profile shadow comparison results
+
+2. guarded replay/rebuild evolution
+   - keep dry-run tooling authoritative and trustworthy
+   - do not add `rebuild --apply` until drift data stays stable
 
 3. selective frontend refinement
    - only after parser/push priorities are clearer

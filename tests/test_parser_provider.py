@@ -223,6 +223,9 @@ def test_structured_event_parser_assets_expose_prompt_and_schema():
     assert request_artifacts["metadata"]["prompt_version"] == STRUCTURED_EVENT_PARSER_PROMPT_VERSION
     assert request_artifacts["metadata"]["model_name"] == "demo-model"
     assert "raw_text: I just finished a heavy debugging session and feel tired." in request_artifacts["user_prompt"]
+    assert "Canonical examples:" in request_artifacts["user_prompt"]
+    assert "chat_update, focus_mode=tired" in request_artifacts["user_prompt"]
+    assert "not rest+recovered" in request_artifacts["user_prompt"]
     assert response_schema["title"] == "ParserDecisionDTO"
     assert "status" in response_schema["properties"]
     assert "metadata" in response_schema["properties"]

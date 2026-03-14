@@ -320,7 +320,7 @@ def test_shadow_compare_records_exact_match_without_mutating_state(monkeypatch, 
                     "metadata": {
                         "provider": "gemini_direct",
                         "parser_version": "gemini_direct_v1",
-                        "prompt_version": "structured_event_parser_prompt_v1",
+                        "prompt_version": "structured_event_parser_prompt_v2",
                         "model_name": "gemini-2.5-flash",
                     },
                 }

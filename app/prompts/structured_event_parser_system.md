@@ -13,3 +13,5 @@ Rules:
 - Keep `confidence` lower when the signal is weak or ambiguous.
 - Keep energy deltas conservative.
 - If no safe structured impact is available, preserve the event summary and use fallback semantics.
+- Mentally drained updates should usually stay in the `chat_update` / `tired` lane.
+- Do not map "I am drained and want to rest" to `rest` / `recovered` unless the event clearly says the user already rested and recovered.

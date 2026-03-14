@@ -17,15 +17,10 @@ from app.models.user_state import UserState
 from app.schemas.common import UserStateSnapshot
 from app.schemas.parsing import ParserDecisionDTO, ParserImpactDTO
 from app.services.parser_provider import get_event_parser_provider, get_shadow_event_parser_provider
+from app.services.replay_service import reduce_state_snapshot
 from app.services.state_service import _ensure_user_state, _snapshot_from_model
 
 logger = logging.getLogger(__name__)
-
-
-def _clamp_energy(value: int) -> int:
-    return max(0, min(100, value))
-
-
 def _decision_metadata_dict(decision: ParserDecisionDTO) -> dict[str, Any]:
     return decision.metadata.model_dump(mode="json")
 
@@ -198,12 +193,10 @@ def apply_state_patch_from_event(
     for _ in range(max_retries):
         state = db.get(UserState, state.user_id)
         expected_version = state.state_version
-        before_snapshot = _snapshot_from_model(state).model_dump(mode="json")
-
-        new_mental = _clamp_energy(state.mental_energy + int(impact.get("mental_delta", 0)))
-        new_physical = _clamp_energy(state.physical_energy + int(impact.get("physical_delta", 0)))
-        new_focus = impact.get("focus_mode") or state.focus_mode
+        before_state_snapshot = _snapshot_from_model(state)
+        before_snapshot = before_state_snapshot.model_dump(mode="json")
         now = datetime.now(timezone.utc)
+        next_state_snapshot = reduce_state_snapshot(before_state_snapshot, impact, updated_at=now)
 
         result = db.execute(
             update(UserState)
@@ -213,10 +206,10 @@ def apply_state_patch_from_event(
             )
             .values(
                 state_version=expected_version + 1,
-                mental_energy=new_mental,
-                physical_energy=new_physical,
-                focus_mode=new_focus,
-                recent_context=impact.get("event_summary"),
+                mental_energy=next_state_snapshot.mental_energy,
+                physical_energy=next_state_snapshot.physical_energy,
+                focus_mode=next_state_snapshot.focus_mode,
+                recent_context=next_state_snapshot.recent_context,
                 source_last_event_id=event.event_id,
                 source_last_event_at=event.occurred_at,
                 updated_at=now,

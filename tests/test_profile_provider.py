@@ -84,6 +84,9 @@ def test_structured_node_profile_assets_expose_prompt_and_schema():
     assert request_artifacts["metadata"]["prompt_version"] == STRUCTURED_NODE_PROFILE_PROMPT_VERSION
     assert request_artifacts["metadata"]["model_name"] == "demo-model"
     assert "allowed_context_tags: movement, deep_focus, light_admin, social" in request_artifacts["user_prompt"]
+    assert "Canonical examples:" in request_artifacts["user_prompt"]
+    assert "recommended_context_tags=[light_admin]" in request_artifacts["user_prompt"]
+    assert "recommended_context_tags=[deep_focus]" in request_artifacts["user_prompt"]
     schema_json = json.dumps(response_schema, ensure_ascii=False)
     assert '"light_admin"' in schema_json
     assert '"medium"' in schema_json
